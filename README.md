@@ -2,8 +2,9 @@
 
 A lightweight, real-time Nginx log visualization tool built with Go and Vue.js.
 
+![Build Status](https://github.com/rj9676564/NginxLogViewer/actions/workflows/docker-publish.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Go](https://img.shields.io/badge/go-1.24+-00ADD8.svg)
+![Go](https://img.shields.io/badge/go-1.23+-00ADD8.svg)
 ![Vue](https://img.shields.io/badge/vue-3.x-4FC08D.svg)
 
 ## ✨ Features
