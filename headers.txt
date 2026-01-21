@@ -1,0 +1,4 @@
+Connection: Upgrade
+Upgrade: websocket
+Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==
+Sec-WebSocket-Version: 13

@@ -1,0 +1,16 @@
+# Binaries
+nginx-log-viewer
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Logs
+*.log
+access.log
+
+# Mac
+.DS_Store
+
+# Go
+go.work

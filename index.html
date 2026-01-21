@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonic Stellar Log Viewer</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --sidebar-bg: #1e293b;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --accent-color: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --border-color: #334155;
+            --log-bg: #020617;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --info: #3b82f6;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            height: 100vh;
+            margin: 0;
+        }
+        
+        #app {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem;
+            gap: 1.5rem;
+        }
+
+        .brand {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .controls, .control-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .controls { gap: 1rem; }
+
+        label { font-size: 0.875rem; color: var(--text-secondary); font-weight: 500; }
+
+        input[type="text"], input[type="search"] {
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+        }
+        input:focus { outline: none; border-color: var(--accent-color); }
+
+        button {
+            background-color: var(--accent-color);
+            color: var(--bg-color);
+            border: none;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:hover { background-color: var(--accent-hover); }
+        button.secondary { background-color: transparent; border: 1px solid var(--border-color); color: var(--text-primary); }
+        button.secondary:hover { background-color: rgba(255,255,255,0.05); }
+
+        .stats { margin-top: auto; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.875rem; color: var(--text-secondary); }
+
+        /* Main Content */
+        .main { flex: 1; display: flex; flex-direction: column; height: 100%; }
+        .header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: rgba(15, 23, 42, 0.9);
+        }
+
+        .status-badge {
+            display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.75rem;
+            border-radius: 9999px; font-size: 0.75rem; font-weight: 600;
+            background-color: rgba(34, 197, 94, 0.1); color: var(--success);
+        }
+        .status-badge.disconnected { background-color: rgba(239, 68, 68, 0.1); color: var(--error); }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; background-color: currentColor; animation: pulse 2s infinite; }
+        .disconnected .status-dot { animation: none; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        .log-container {
+            flex: 1; overflow-y: auto; padding: 1.5rem; background-color: var(--log-bg);
+            font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace; font-size: 0.875rem;
+            display: flex; flex-direction: column; gap: 0.5rem;
+        }
+
+        .log-entry {
+            display: grid; grid-template-columns: 100px 1fr; gap: 1rem; padding: 0.5rem;
+            border-radius: 0.25rem; border-left: 2px solid transparent; animation: fadeIn 0.3s ease-out;
+        }
+        .log-entry:hover { background-color: rgba(255, 255, 255, 0.02); }
+        .status-2xx { border-left-color: var(--success); }
+        .status-3xx { border-left-color: var(--info); }
+        .status-4xx { border-left-color: var(--warning); }
+        .status-5xx { border-left-color: var(--error); }
+
+        .timestamp { color: var(--text-secondary); font-size: 0.75rem; }
+        .content { word-break: break-all; white-space: pre-wrap; line-height: 1.5; }
+
+        .tag { padding: 2px 4px; border-radius: 4px; font-size: 0.75rem; color: #fff; margin-right: 4px; }
+        .tag-query { background-color: rgba(165, 180, 252, 0.2); color: #a5b4fc; }
+        .tag-body { background-color: rgba(253, 186, 116, 0.2); color: #fdba74; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Modal */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal { background-color: var(--sidebar-bg); padding: 2rem; border-radius: 1rem; width: 600px; max-width: 90%; border: 1px solid var(--border-color); }
+        .modal h2 { margin-bottom: 1rem; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem; }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--log-bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="sidebar">
+            <div class="brand">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2v20M2 12h20M12 2a10 10 0 0 1 10 10 10 10 0 0 1-10 10 10 10 0 0 1-10-10 10 10 0 0 1 10-10z"></path>
+                </svg>
+                Sonic Stellar
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label>Search / Filter</label>
+                    <input type="search" v-model="filter" placeholder="Filter logs (regex supported)...">
+                </div>
+
+                <div class="control-group">
+                    <label>Log Format</label>
+                    <button class="secondary" @click="showConfig = true">Configure Format</button>
+                </div>
+
+                <div class="control-group">
+                    <label>Actions</label>
+                    <button class="secondary" @click="clearLogs">Clear Logs</button>
+                    <button @click="togglePause" :style="{ backgroundColor: isPaused ? 'var(--success)' : '' }">
+                        {{ isPaused ? 'Resume' : 'Pause' }}
+                    </button>
+                </div>
+            </div>
+
+            <div class="stats">
+                <div>Status: {{ connectionStatus }}</div>
+                <div>Entries: {{ logs.length }}</div>
+            </div>
+        </div>
+
+        <div class="main">
+            <div class="header">
+                <h3>Nginx Access Log</h3>
+                <div class="status-badge" :class="{ disconnected: !isConnected }">
+                    <div class="status-dot"></div>
+                    {{ isConnected ? 'LIVE' : 'OFFLINE' }}
+                </div>
+            </div>
+            <div class="log-container" ref="logContainer">
+                <div v-for="(log, index) in filteredLogs" :key="index" :class="['log-entry', log.statusClass]">
+                    <div class="timestamp">{{ log.time }}</div>
+                    <div class="content">
+                        <div>
+                            <span style="color: var(--accent-color); font-weight:bold;">{{ log.ip }}</span> 
+                            <span style="margin: 0 0.5rem;">|</span>
+                            <span style="font-weight:600;">{{ log.status }}</span>
+                            <span style="margin: 0 0.5rem;">|</span>
+                            {{ log.request }}
+                        </div>
+                        <div v-if="log.query || log.body" style="margin-top: 4px; font-size: 0.8rem; overflow-x: auto;">
+                            <div v-if="log.query && log.query !== '-'" style="display:flex; margin-bottom:2px;">
+                                <span class="tag tag-query">QUERY</span> 
+                                <span style="white-space: pre-wrap;">{{ log.query }}</span>
+                            </div>
+                            <div v-if="log.body && log.body !== '-'" style="display:flex;">
+                                <span class="tag tag-body">BODY</span> 
+                                <span style="white-space: pre-wrap;">{{ log.body }}</span>
+                            </div>
+                        </div>
+                        <div style="font-size:0.75rem; opacity:0.5; margin-top:4px;">{{ log.raw }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Config Modal -->
+        <div class="modal-overlay" v-if="showConfig" @click.self="showConfig = false">
+            <div class="modal">
+                <h2>Log Format Configuration</h2>
+                <div class="control-group">
+                    <label>Nginx Log Format String</label>
+                    <input type="text" v-model="tempFormat" style="width: 100%;">
+                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                        Enter the standard Nginx log format variables.
+                    </p>
+                </div>
+                <div class="modal-actions">
+                    <button class="secondary" @click="showConfig = false">Cancel</button>
+                    <button @click="saveConfig">Save Configuration</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, watch, nextTick, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const logs = ref([]);
+                const isPaused = ref(false);
+                const filter = ref('');
+                const format = ref('$remote_addr - $remote_user [$time_local] "$request" $status GET_ARGS: "$query_string" POST_BODY: "$request_body"');
+                const tempFormat = ref(format.value);
+                const showConfig = ref(false);
+                const connectionStatus = ref('Connecting...');
+                const isConnected = ref(false);
+                const logContainer = ref(null);
+                const maxLogs = 1000;
+
+                let socket = null;
+                let logRegex = null;
+
+                // Regex Generator
+                const generateRegex = (fmt) => {
+                    let pattern = fmt.replace(/\s+/g, '\\s+').trim();
+                    pattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, (match) => match === '$' ? '$' : '\\' + match);
+                    
+                    const variables = [];
+                    pattern = pattern.replace(/\$(\w+)/g, (_, varName) => {
+                        variables.push(varName);
+                        if (varName === 'time_local') return '(?<time>[^\]]+)';
+                        if (varName === 'request') return '(?<request>[^"]+)';
+                        if (varName === 'status') return '(?<status>\\d{3})';
+                        if (varName === 'body_bytes_sent') return '(?<bytes>\\d+|-)';
+                        if (varName === 'http_user_agent') return '(?<ua>[^"]+)';
+                        if (varName === 'query_string') return '(?<query_string>.*?)';
+                        if (varName === 'request_body') return '(?<request_body>.*?)';
+                        return `(?<${varName}>.+?)`;
+                    });
+
+                    try {
+                        return new RegExp(`^${pattern}$`);
+                    } catch (e) {
+                        console.error('Regex Gen Error', e);
+                        return null;
+                    }
+                };
+
+                // Initialize regex
+                logRegex = generateRegex(format.value);
+
+                const parseLog = (line) => {
+                    if (!logRegex) return { raw: line, status: 0, time: new Date().toLocaleTimeString() };
+                    
+                    const match = line.match(logRegex);
+                    if (match && match.groups) {
+                        const g = match.groups;
+                        return {
+                            ip: g.remote_addr || g.ip || '-',
+                            time: g.time || g.time_local || new Date().toLocaleTimeString(),
+                            request: g.request || '-',
+                            status: parseInt(g.status) || 0,
+                            query: g.query_string || '',
+                            body: g.request_body || '',
+                            raw: line
+                        };
+                    }
+                    return { raw: line, status: (line.match(/HTTP\/1\.\d" (\d{3})/) || [0,0])[1] || 0 };
+                };
+
+                const getStatusClass = (status) => {
+                    if (status >= 200 && status < 300) return 'status-2xx';
+                    if (status >= 300 && status < 400) return 'status-3xx';
+                    if (status >= 400 && status < 500) return 'status-4xx';
+                    if (status >= 500) return 'status-5xx';
+                    return '';
+                };
+
+                const addLog = (rawLine) => {
+                    if (isPaused.value) return;
+                    
+                    const parsed = parseLog(rawLine);
+                    parsed.statusClass = getStatusClass(parsed.status);
+                    
+                    // Optimization: Freeze object to skip deep reactivity tracking
+                    logs.value.push(Object.freeze(parsed));
+                    if (logs.value.length > maxLogs) logs.value.shift();
+                    
+                    triggerScroll();
+                };
+
+                let scrollFrame = null;
+                const triggerScroll = () => {
+                    if (scrollFrame) return;
+                    scrollFrame = requestAnimationFrame(() => {
+                        if (logContainer.value) {
+                            const el = logContainer.value;
+                            // Only auto-scroll if user is near bottom
+                            const threshold = 100;
+                            const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+                            
+                            if (isNearBottom) {
+                                el.scrollTop = el.scrollHeight;
+                            }
+                        }
+                        scrollFrame = null;
+                    });
+                };
+
+                const filteredLogs = computed(() => {
+                    if (!filter.value) return logs.value;
+                    try {
+                        const regex = new RegExp(filter.value, 'i');
+                        return logs.value.filter(l => regex.test(l.raw));
+                    } catch (e) {
+                        return logs.value.filter(l => l.raw.toLowerCase().includes(filter.value.toLowerCase()));
+                    }
+                });
+
+                const connect = () => {
+                    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+                    const url = `${proto}://${window.location.host}/ws`;
+                    
+                    socket = new WebSocket(url);
+                    
+                    socket.onopen = () => {
+                        connectionStatus.value = 'Connected';
+                        isConnected.value = true;
+                    };
+                    
+                    socket.onmessage = (e) => {
+                        // Handle multiple lines (history burst)
+                        const lines = e.data.split('\n');
+                        lines.forEach(line => {
+                            if(line.trim()) addLog(line);
+                        });
+                    };
+                    
+                    socket.onclose = () => {
+                        connectionStatus.value = 'Disconnected';
+                        isConnected.value = false;
+                        setTimeout(connect, 3000);
+                    };
+
+                    socket.onerror = (e) => console.error("WS Error", e);
+                };
+
+                const clearLogs = () => logs.value = [];
+                const togglePause = () => isPaused.value = !isPaused.value;
+                
+                const saveConfig = () => {
+                    format.value = tempFormat.value;
+                    const newRegex = generateRegex(format.value);
+                    if (newRegex) {
+                        logRegex = newRegex;
+                        showConfig.value = false;
+                        alert('Format updated!');
+                    } else {
+                        alert('Invalid format pattern');
+                    }
+                };
+
+                onMounted(() => {
+                    connect();
+                });
+
+                return {
+                    logs,
+                    filteredLogs,
+                    filter,
+                    isPaused,
+                    showConfig,
+                    tempFormat,
+                    connectionStatus,
+                    isConnected,
+                    logContainer,
+                    clearLogs,
+                    togglePause,
+                    saveConfig
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

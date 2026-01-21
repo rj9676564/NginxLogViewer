@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  log-viewer:
+    build: .
+    image: nginx-log-viewer
+    container_name: nginx-log-viewer
+    ports:
+      - "58080:58080"
+    volumes:
+      # Mount your host log file to the container
+      # CHANGE ./access.log to your real log file path on host
+      - ./access.log:/var/log/nginx/access.log:ro
+    command: ["./nginx-log-viewer", "-file", "/var/log/nginx/access.log", "-addr", ":58080"]
+    restart: unless-stopped
