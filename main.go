@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -22,10 +23,42 @@ var (
 	addr       = flag.String("addr", ":58080", "http service address")
 	logFile    = flag.String("file", "/var/log/nginx/access.log", "path to nginx log file")
 	dbPath     = flag.String("db", "./logs.db", "path to sqlite database")
-	// Keeping the default format simple, but providing a way to override via code or config later if needed.
-	// For now we will use a flexible regex that adapts to the specific custom format the user mentioned.
-	// In a real generic tool, we might want to parse the log_format string itself.
-	formatStr  = flag.String("format", "", "Nginx log format (not fully implemented in backend cli, hardcoded for now)")
+	formatStr  = flag.String("format", "", "Nginx log format string")
+	configPath = flag.String("config", "", "path to config.json file")
+)
+
+type Config struct {
+	Addr      string `json:"addr"`
+	LogFile   string `json:"log_file"`
+	DBPath    string `json:"db_path"`
+	LogFormat string `json:"log_format"`
+}
+
+func loadConfig(path string) (*Config, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	var cfg Config
+	if err := json.NewDecoder(file).Decode(&cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
+}
+
+var (
+	// logRegex will be initialized at runtime
+	logRegex *regexp.Regexp
+	// Fallback for standard combined if needed
+	simpleRegex = regexp.MustCompile(`^(?P<ip>\S+) - \S+ \[(?P<time>[^\]]+)\] "(?P<request>[^"]+)" (?P<status>\d+) (?P<bytes>\d+) "-" "(?P<ua>[^"]+)"`)
 )
 
 // LogEntry roughly matches the DB schema and JSON output
@@ -286,15 +319,41 @@ func handleHistory(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(logs)
 }
 
-// Regex Parser logic
-// Custom format provided by user:
-// '$remote_addr - $remote_user [$time_local] "$request" $status GET_ARGS: "$query_string" POST_BODY: "$request_body"'
-// Note: $request usually matches "METHOD PATH PROTOCOL"
-// We need to robustly matching this.
-var logRegex = regexp.MustCompile(`^(?P<ip>\S+) - (?P<user>\S+) \[(?P<time>[^\]]+)\] "(?P<method>\S+) (?P<path>\S+) (?P<proto>[^"]+)" (?P<status>\d+) (?:GET_ARGS: "(?P<query>.*?)")? (?:POST_BODY: "(?P<body>.*)")?`)
+// buildRegexFromNginx converts an Nginx log_format string into a regular expression
+func buildRegexFromNginx(format string) *regexp.Regexp {
+	// Reference mapping: nginx variable -> regex named group
+	replacements := map[string]string{
+		"$remote_addr":     `(?P<ip>\S+)`,
+		"$remote_user":     `(?P<user>\S*)`,
+		"$time_local":      `(?P<time>[^\]]+)`,
+		"$request":         `(?P<method>\S+) (?P<path>\S+) (?P<proto>[^"]+)`,
+		"$status":          `(?P<status>\d+)`,
+		"$body_bytes_sent": `(?P<bytes>\d+)`,
+		"$http_referer":    `(?P<referer>[^"]*)`,
+		"$http_user_agent": `(?P<ua>[^"]*)`,
+		"$query_string":    `(?P<query>[^"]*)`,
+		"$request_body":    `(?P<body>.*)`,
+	}
 
-// Fallback for standard combined if needed, but let's prioritize the specific format user asked for
-var simpleRegex = regexp.MustCompile(`^(?P<ip>\S+) - \S+ \[(?P<time>[^\]]+)\] "(?P<request>[^"]+)" (?P<status>\d+) (?P<bytes>\d+) "-" "(?P<ua>[^"]+)"`)
+	// 1. Escape regex special characters from the format string
+	res := regexp.QuoteMeta(format)
+
+	// 2. Replace escaped nginx variables with regex groups
+	// Note: QuoteMeta turns $ into \$
+	keys := []string{
+		"$remote_addr", "$remote_user", "$time_local", "$request",
+		"$status", "$body_bytes_sent", "$http_referer", "$http_user_agent",
+		"$query_string", "$request_body",
+	}
+
+	for _, k := range keys {
+		v := replacements[k]
+		escapedVar := regexp.QuoteMeta(k)
+		res = strings.ReplaceAll(res, escapedVar, v)
+	}
+
+	return regexp.MustCompile("^" + res + "$")
+}
 
 func parseLine(line string) *LogEntry {
 	entry := &LogEntry{
@@ -399,6 +458,51 @@ func tailLog(hub *Hub, filename string) {
 
 func main() {
 	flag.Parse()
+
+	// 1. Start with defaults
+	finalAddr := ":58080"
+	finalLogFile := "/var/log/nginx/access.log"
+	finalDBPath := "./logs.db"
+	finalFormat := `$remote_addr - $remote_user [$time_local] "$request" $status GET_ARGS: "$query_string" POST_BODY: "$request_body"`
+
+	// 2. Override with Config File if provided
+	if *configPath != "" {
+		if cfg, err := loadConfig(*configPath); err == nil {
+			if cfg.Addr != "" { finalAddr = cfg.Addr }
+			if cfg.LogFile != "" { finalLogFile = cfg.LogFile }
+			if cfg.DBPath != "" { finalDBPath = cfg.DBPath }
+			if cfg.LogFormat != "" { finalFormat = cfg.LogFormat }
+			log.Printf("Loaded config from %s", *configPath)
+		} else {
+			log.Printf("Warning: Failed to load config from %s: %v", *configPath, err)
+		}
+	}
+
+	// 3. Override with Environment Variables
+	finalAddr = getEnv("LISTEN_ADDR", finalAddr)
+	finalLogFile = getEnv("LOG_FILE", finalLogFile)
+	finalDBPath = getEnv("DB_PATH", finalDBPath)
+	finalFormat = getEnv("LOG_FORMAT", finalFormat)
+
+	// 4. Override with Command line flags (if they are NOT default values)
+	flag.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "addr": finalAddr = *addr
+		case "file": finalLogFile = *logFile
+		case "db": finalDBPath = *dbPath
+		case "format": finalFormat = *formatStr
+		}
+	})
+
+	// Apply final values
+	*addr = finalAddr
+	*logFile = finalLogFile
+	*dbPath = finalDBPath
+	*formatStr = finalFormat
+
+	log.Printf("Using log format: %s", *formatStr)
+	logRegex = buildRegexFromNginx(*formatStr)
+
 	initDB()
 	
 	hub := newHub()

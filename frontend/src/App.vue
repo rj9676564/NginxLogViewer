@@ -59,39 +59,45 @@
       </div>
 
       <!-- Virtual List Container -->
-      <div class="log-list" ref="listRef">
-        <div v-for="log in filteredLogs" :key="log.id || Math.random()" class="log-row">
-          <!-- Time -->
-          <div class="col-time" :title="log.time">{{ log.timeOnly }}</div>
+      <div class="log-list" ref="listRef" @scroll="handleScroll">
+        <!-- Spacer to simulate full scroll height -->
+        <div :style="{ height: `${totalHeight}px`, position: 'relative' }">
+          <!-- Offset wrapper for visible items -->
+          <div :style="{ transform: `translateY(${offsetY}px)` }">
+            <div v-for="log in visibleLogs" :key="log.id || Math.random()" class="log-row">
+              <!-- Time -->
+              <div class="col-time" :title="log.time">{{ log.timeOnly }}</div>
 
-          <!-- Status -->
-          <div class="col-status status-badge" :class="getStatusClass(log.status)">{{ log.status }}</div>
-          
-          <!-- Method -->
-          <div class="col-method" :style="{ color: getMethodColor(log.method) }">{{ log.method }}</div>
-          
-          <!-- Path + Query + Body Icon -->
-          <div class="col-path">
-            <span :title="log.path">{{ log.path }}</span>
-            <span v-if="log.query && log.query !== '-'" class="query-string">?{{ log.query }}</span>
-            
-            <!-- Antd Popover for Body (Hover) -->
-            <a-popover placement="bottom" title="Request Body" trigger="hover" v-if="log.body && log.body !== '-'">
-              <template #content>
-                <div class="popover-json" :style="{ color: isDarkMode ? '#e2e8f0' : '#333' }">{{ log.body }}</div>
-              </template>
-              <a-tag color="orange" style="margin-left: 8px; cursor: pointer; border-radius: 2px;" @click="isPaused = true" title="Click to Pause & Inspect">BODY</a-tag>
-            </a-popover>
-          </div>
+              <!-- Status -->
+              <div class="col-status status-badge" :class="getStatusClass(log.status)">{{ log.status }}</div>
+              
+              <!-- Method -->
+              <div class="col-method" :style="{ color: getMethodColor(log.method) }">{{ log.method }}</div>
+              
+              <!-- Path + Query + Body Icon -->
+              <div class="col-path">
+                <span :title="log.path">{{ log.path }}</span>
+                <span v-if="log.query && log.query !== '-'" class="query-string">?{{ log.query }}</span>
+                
+                <!-- Antd Popover for Body (Hover) -->
+                <a-popover placement="bottom" title="Request Body" trigger="hover" v-if="log.body && log.body !== '-'">
+                  <template #content>
+                    <div class="popover-json" :style="{ color: isDarkMode ? '#e2e8f0' : '#333' }">{{ log.body }}</div>
+                  </template>
+                  <a-tag color="orange" style="margin-left: 8px; cursor: pointer; border-radius: 2px;" @click="isPaused = true" title="Click to Pause & Inspect">BODY</a-tag>
+                </a-popover>
+              </div>
 
-          <!-- Meta -->
-          <div class="col-meta">
-            <a-tooltip v-if="log.os" :title="log.ua">
-              <a-tag :bordered="false" class="meta-tag">{{ log.os }}</a-tag>
-            </a-tooltip>
-            <a-tooltip v-if="log.device === 'Mobile'" title="Mobile Device">
-              <span>📱</span>
-            </a-tooltip>
+              <!-- Meta -->
+              <div class="col-meta">
+                <a-tooltip v-if="log.os" :title="log.ua">
+                  <a-tag :bordered="false" class="meta-tag">{{ log.os }}</a-tag>
+                </a-tooltip>
+                <a-tooltip v-if="log.device === 'Mobile'" title="Mobile Device">
+                  <span>📱</span>
+                </a-tooltip>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -104,6 +110,7 @@ import { ref, computed, onMounted, nextTick, watch } from 'vue';
 
 const logs = ref([]);
 const backlog = ref([]); // Buffer for paused logs
+const renderBuffer = ref([]); // Buffer for batching updates
 const searchText = ref('');
 const isPaused = ref(false);
 const isConnected = ref(false);
@@ -112,76 +119,78 @@ const listRef = ref(null);
 const logFile = ref('access.log');
 const isDarkMode = ref(localStorage.getItem('theme') !== 'light');
 
-const varTextPrimary = computed(() => isDarkMode.value ? '#cccccc' : '#333333');
+// --- Virtual Scroll Logic ---
+const itemHeight = 36;
+const scrollTop = ref(0);
+const containerHeight = ref(800);
+const maxLogs = 2000;
 
-const toggleTheme = () => {
-    isDarkMode.value = !isDarkMode.value;
-    localStorage.setItem('theme', isDarkMode.value ? 'dark' : 'light');
+const visibleCount = computed(() => Math.ceil(containerHeight.value / itemHeight) + 5);
+const startIndex = computed(() => Math.floor(scrollTop.value / itemHeight));
+
+const visibleLogs = computed(() => {
+  const all = filteredLogs.value;
+  return all.slice(startIndex.value, startIndex.value + visibleCount.value);
+});
+
+const totalHeight = computed(() => filteredLogs.value.length * itemHeight);
+const offsetY = computed(() => startIndex.value * itemHeight);
+
+const handleScroll = (e) => {
+  scrollTop.value = e.target.scrollTop;
 };
 
-watch(isDarkMode, (val) => {
-    document.documentElement.setAttribute('data-theme', val ? 'dark' : 'light');
-}, { immediate: true });
+const updateContainerHeight = () => {
+  if (listRef.value) containerHeight.value = listRef.value.clientHeight;
+};
 
-const maxLogs = 1000;
-let socket = null;
-let scrollFrame = null;
-
-const getMethodColor = (m) => {
-  const map = { GET: '#4ec9b0', POST: '#569cd6', PUT: '#dcdcaa', DELETE: '#f44747' };
-  // Adjust colors for light mode visibility if needed, but these usually work on white too
-  if (!isDarkMode.value) {
-     const lightMap = { GET: '#059669', POST: '#2563eb', PUT: '#d97706', DELETE: '#dc2626' };
-     return lightMap[m] || '#666';
+// --- Batching Updates Logic ---
+// We collect logs in a temporary array and flush to the reactive 'logs' every 100ms
+let flushTimer = null;
+const flushLogs = () => {
+  if (renderBuffer.value.length === 0) return;
+  
+  const newLogs = [...logs.value, ...renderBuffer.value];
+  renderBuffer.value = [];
+  
+  // Keep limit
+  if (newLogs.length > maxLogs) {
+    logs.value = newLogs.slice(newLogs.length - maxLogs);
+  } else {
+    logs.value = newLogs;
   }
-  return map[m] || '#cccccc';
-};
 
-const getStatusClass = (s) => {
-  if (s < 300) return 'c-2xx';
-  if (s < 400) return 'c-3xx';
-  if (s < 500) return 'c-4xx';
-  return 'c-5xx';
-};
-
-const parseTime = (raw) => {
-  const parts = raw.split(':');
-  if (parts.length >= 4) {
-    return parts.slice(1, 4).join(':').split(' ')[0];
-  }
-  return raw;
+  // Auto scroll
+  nextTick(() => {
+    if (listRef.value) {
+      const el = listRef.value;
+      if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
+        el.scrollTop = el.scrollHeight;
+      }
+    }
+  });
 };
 
 const addLog = (entry) => {
   entry.timeOnly = parseTime(entry.time);
   const frozen = Object.freeze(entry);
   
-  // If paused, buffer to backlog
   if (isPaused.value) {
     backlog.value.push(frozen);
     return;
   }
 
-  logs.value.push(frozen);
-  if (logs.value.length > maxLogs) logs.value.shift();
-  
-  if (!scrollFrame) {
-    scrollFrame = requestAnimationFrame(() => {
-      if (listRef.value) {
-        const el = listRef.value;
-        if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) {
-          el.scrollTop = el.scrollHeight;
-        }
-      }
-      scrollFrame = null;
-    });
+  renderBuffer.value.push(frozen);
+  if (!flushTimer) {
+     flushTimer = setInterval(flushLogs, 100); // 10 FPS for updates is plenty and saves CPU
   }
 };
 
 const filteredLogs = computed(() => {
-  if (!searchText.value) return logs.value;
+  const all = logs.value;
+  if (!searchText.value) return all;
   const q = searchText.value.toLowerCase();
-  return logs.value.filter(l => 
+  return all.filter(l => 
     (l.path && l.path.toLowerCase().includes(q)) || 
     (l.ip && l.ip.includes(q)) ||
     (l.status && String(l.status).includes(q))
@@ -208,23 +217,20 @@ const fetchStats = async () => {
 const fetchHistory = async () => {
   try {
     const history = await (await fetch('/api/history')).json();
-    if (history) logs.value = history.reverse().map(l => ({...l, timeOnly: parseTime(l.time)})).map(Object.freeze);
-    nextTick(() => { if(listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight; });
+    if (history) {
+        logs.value = history.reverse().map(l => ({...l, timeOnly: parseTime(l.time)})).map(Object.freeze);
+        nextTick(() => { if(listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight; });
+    }
   } catch(e){}
 };
 
 const togglePause = () => {
     isPaused.value = !isPaused.value;
     if (!isPaused.value) {
-        // Resume: flush backlog
         if (backlog.value.length > 0) {
-            logs.value.push(...backlog.value);
+            logs.value = [...logs.value, ...backlog.value].slice(-maxLogs);
             backlog.value = [];
         }
-        // trim
-        if (logs.value.length > maxLogs) logs.value = logs.value.slice(logs.value.length - maxLogs);
-        
-        // Auto scroll to bottom
         nextTick(() => {
             if(listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight;
         });
@@ -234,12 +240,22 @@ const togglePause = () => {
 const clearLogs = () => {
     logs.value = [];
     backlog.value = [];
+    renderBuffer.value = [];
 };
+
+import { onUnmounted } from 'vue';
 
 onMounted(() => {
   connect();
   fetchHistory();
   setInterval(fetchStats, 5000);
+  updateContainerHeight();
+  window.addEventListener('resize', updateContainerHeight);
+});
+
+onUnmounted(() => {
+  if (flushTimer) clearInterval(flushTimer);
+  window.removeEventListener('resize', updateContainerHeight);
 });
 </script>
 

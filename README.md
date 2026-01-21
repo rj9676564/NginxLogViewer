@@ -84,6 +84,32 @@ docker run -p 58080:58080 -v /var/log/nginx/access.log:/var/log/nginx/access.log
 
 ## ⚙️ Configuration
 
+The application can be configured via Command-line flags, Environment variables, or a JSON config file.
+
+### Priority Order
+1. **Command-line Flags** (Highest)
+2. **Environment Variables**
+3. **JSON Config File** (`-config` flag)
+4. **Default Values** (Lowest)
+
+### Available Settings
+| Flag | Env Var | Config Key | Default | Description |
+|------|---------|------------|---------|-------------|
+| `-addr` | `LISTEN_ADDR` | `addr` | `:58080` | Server listening address |
+| `-file` | `LOG_FILE` | `log_file` | `/var/log/nginx/access.log` | Path to Nginx log file |
+| `-format`| `LOG_FORMAT` | `log_format` | (Custom with POST_BODY) | Nginx `log_format` string |
+| `-db` | `DB_PATH` | `db_path` | `./logs.db` | Path to SQLite database |
+| `-config`| - | - | - | Path to JSON config file |
+
+### Example Config File (`config.json`)
+```json
+{
+    "addr": ":58080",
+    "log_file": "/var/log/nginx/access.log",
+    "log_format": "$remote_addr - $remote_user [$time_local] \"$request\" $status ..."
+}
+```
+
 ### CLI Arguments
 
 | Flag | Description | Default |
