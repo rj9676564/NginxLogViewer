@@ -1,33 +1,26 @@
-# Build stage
-FROM golang:1.24-alpine AS builder
-
+# Stage 1: Build Frontend
+FROM node:18-alpine AS build-frontend
 WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ .
+RUN npm run build
 
-# Copy go mod and sum files
+# Stage 2: Build Backend
+FROM golang:1.24-alpine AS build-backend
+WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
-
-# Copy source code
-COPY main.go ./
-
-# Build the binary
+COPY *.go ./
 RUN CGO_ENABLED=0 GOOS=linux go build -o nginx-log-viewer .
 
-# Final stage
+# Stage 3: Final Image
 FROM alpine:latest
-
 WORKDIR /app
-
-# Install basic certificates for HTTPS if needed
 RUN apk --no-cache add ca-certificates
 
-# Copy binary from builder
-COPY --from=builder /app/nginx-log-viewer .
-# Copy static files (index.html)
-COPY index.html .
+COPY --from=build-backend /app/nginx-log-viewer .
+COPY --from=build-frontend /app/dist ./frontend/dist
 
-# Expose port
 EXPOSE 58080
-
-# Run
 CMD ["./nginx-log-viewer"]

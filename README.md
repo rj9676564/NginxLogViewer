@@ -44,23 +44,34 @@ A lightweight, real-time Nginx log visualization tool built with Go and Vue.js.
    go run main.go -addr :58080 -file /var/log/nginx/access.log
    ```
 
-3. Open your browser:
-   Visit [http://localhost:58080](http://localhost:58080)
+## Run Locally
 
-### Running with Docker 🐳
+### 1. Start Backend (Go)
+The backend serves the API and WebSocket at port `58080`.
+```bash
+go mod tidy
+go run main.go -file /path/to/access.log
+# Ensure to pass a valid log file path
+```
 
-1. Build the image:
-   ```bash
-   docker build -t nginx-log-viewer .
-   ```
+### 2. Start Frontend (Vue + Vite)
+In a new terminal, start the frontend dev server. It will proxy API requests to the backend.
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Access the UI at `http://localhost:5173`.
 
-2. Run the container:
-   ```bash
-   docker run -d \
-     -p 58080:58080 \
-     -v /path/to/your/access.log:/var/log/nginx/access.log:ro \
-     nginx-log-viewer \
-     ./nginx-log-viewer -file /var/log/nginx/access.log
+## Docker Build
+
+The Dockerfile is a multi-stage build that compiles both the frontend (Node.js) and backend (Go).
+
+```bash
+docker build -t nginx-log-viewer .
+docker run -p 58080:58080 -v /var/log/nginx/access.log:/var/log/nginx/access.log nginx-log-viewer
+```
+(When running via Docker, the Go server serves the static frontend files on port 58080). 
    ```
 
    **Or using Docker Compose:**

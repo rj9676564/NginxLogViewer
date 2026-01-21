@@ -14,3 +14,12 @@ access.log
 
 # Go
 go.work
+
+# DB
+logs.db
+
+# Frontend
+frontend/node_modules
+frontend/dist
+.env.local
+.env.*.local
