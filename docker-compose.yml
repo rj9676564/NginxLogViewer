@@ -3,7 +3,7 @@ version: '3.8'
 services:
   log-viewer:
     build: .
-    image: nginx-log-viewer
+    image: laibin2886/nginx-log-viewer:latest
     container_name: nginx-log-viewer
     ports:
       - "58080:58080"
