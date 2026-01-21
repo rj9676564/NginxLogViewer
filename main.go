@@ -321,14 +321,21 @@ func handleHistory(w http.ResponseWriter, r *http.Request) {
 
 // buildRegexFromNginx converts an Nginx log_format string into a regular expression
 func buildRegexFromNginx(format string) *regexp.Regexp {
+	// Normalize format: remove newlines and collapse multiple spaces
+	format = strings.ReplaceAll(format, "\n", " ")
+	format = strings.ReplaceAll(format, "\r", " ")
+	reSpace := regexp.MustCompile(`\s+`)
+	format = reSpace.ReplaceAllString(format, " ")
+	format = strings.TrimSpace(format)
+
 	// Reference mapping: nginx variable -> regex named group
 	replacements := map[string]string{
 		"$remote_addr":     `(?P<ip>\S+)`,
 		"$remote_user":     `(?P<user>\S*)`,
 		"$time_local":      `(?P<time>[^\]]+)`,
-		"$request":         `(?P<method>\S+) (?P<path>\S+) (?P<proto>[^"]+)`,
+		"$request":         `(?P<method>\S+)\s+(?P<path>\S+)\s+(?P<proto>[^"]*)`,
 		"$status":          `(?P<status>\d+)`,
-		"$body_bytes_sent": `(?P<bytes>\d+)`,
+		"$body_bytes_sent": `(?P<bytes>\d*)`,
 		"$http_referer":    `(?P<referer>[^"]*)`,
 		"$http_user_agent": `(?P<ua>[^"]*)`,
 		"$query_string":    `(?P<query>[^"]*)`,
@@ -338,33 +345,34 @@ func buildRegexFromNginx(format string) *regexp.Regexp {
 	// 1. Escape regex special characters from the format string
 	res := regexp.QuoteMeta(format)
 
-	// 2. Replace escaped nginx variables with regex groups
-	// Note: QuoteMeta turns $ into \$
-	keys := []string{
-		"$remote_addr", "$remote_user", "$time_local", "$request",
-		"$status", "$body_bytes_sent", "$http_referer", "$http_user_agent",
-		"$query_string", "$request_body",
-	}
-
-	for _, k := range keys {
-		v := replacements[k]
+	// 2. Handle nginx variables (convert back from quoted \$ to group)
+	for k, v := range replacements {
 		escapedVar := regexp.QuoteMeta(k)
 		res = strings.ReplaceAll(res, escapedVar, v)
 	}
 
-	return regexp.MustCompile("^" + res + "$")
+	// 3. Handle flexible whitespace: any space in format can match one or more spaces
+	res = strings.ReplaceAll(res, `\ `, `\s+`)
+	res = strings.ReplaceAll(res, ` `, `\s+`)
+
+	// Final cleanup and ensure it matches the whole line but is robust to trailing junk
+	return regexp.MustCompile("^" + res + `(?:\s*.*)?$`)
 }
 
 func parseLine(line string) *LogEntry {
 	entry := &LogEntry{
 		Raw:       line,
 		CreatedAt: time.Now().Unix(),
+		Path:      "-", // Default values so frontend shows something
+		Method:    "LOG",
+		Status:    200,
 	}
 
 	// Try specific format first
 	if matches := logRegex.FindStringSubmatch(line); matches != nil {
 		names := logRegex.SubexpNames()
 		for i, match := range matches {
+			if match == "" { continue }
 			switch names[i] {
 			case "ip":
 				entry.IP = match
@@ -380,19 +388,12 @@ func parseLine(line string) *LogEntry {
 				entry.Query = match
 			case "body":
 				entry.Body = match
+			case "bytes":
+				fmt.Sscanf(match, "%d", &entry.Bytes)
+			case "ua":
+				entry.UA = match
 			}
 		}
-		// Since this format doesn't have UA, we leave it empty or try to find it if we adjust regex
-		// Wait, the user's format string: '$remote_addr - $remote_user [$time_local] "$request" $status GET_ARGS: "$query_string" POST_BODY: "$request_body"'
-		// IT DOES NOT HAVE BYTES, REFERER or UA.
-		// So we won't get UA info from this specific format unless we change the regex to be looser or the format changes.
-		// Assuming the line might contain more info or we just parse what we have.
-		
-		// For the sake of the feature request "Browser/System", we need UA.
-		// I will check if the line *actually* has UA at the end (maybe user simplified the description).
-		// If strictly following user desc, we have no UA.
-		// But let's try to see if there is extra text or use a generic "catch all" at the end if needed.
-		// For now, if we don't have UA, Browser/OS will be empty.
 	} else if matches := simpleRegex.FindStringSubmatch(line); matches != nil {
 		// Fallback to standard combined for testing/other logs
 		names := simpleRegex.SubexpNames()
@@ -417,6 +418,13 @@ func parseLine(line string) *LogEntry {
 				entry.UA = match
 			}
 		}
+	} else {
+		// If both fail, try to at least find an IP at the start
+		ipMatch := regexp.MustCompile(`^(\S+)`).FindStringSubmatch(line)
+		if len(ipMatch) > 1 {
+			entry.IP = ipMatch[1]
+		}
+		log.Printf("[Parse Error] Line did not match any format: %s", line)
 	}
 
 	// Enrich if UA is present

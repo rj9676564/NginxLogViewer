@@ -76,8 +76,13 @@
               
               <!-- Path + Query + Body Icon -->
               <div class="col-path">
-                <span :title="log.path">{{ log.path }}</span>
-                <span v-if="log.query && log.query !== '-'" class="query-string">?{{ log.query }}</span>
+                <template v-if="log.path">
+                    <span :title="log.path">{{ log.path }}</span>
+                    <span v-if="log.query && log.query !== '-'" class="query-string">?{{ log.query }}</span>
+                </template>
+                <template v-else>
+                    <span style="color: var(--text-secondary); opacity: 0.7; font-style: italic;">{{ log.raw }}</span>
+                </template>
                 
                 <!-- Antd Popover for Body (Hover) -->
                 <a-popover placement="bottom" title="Request Body" trigger="hover" v-if="log.body && log.body !== '-'">
@@ -197,6 +202,44 @@ const filteredLogs = computed(() => {
   );
 });
 
+const varTextPrimary = computed(() => isDarkMode.value ? '#cccccc' : '#333333');
+
+const toggleTheme = () => {
+    isDarkMode.value = !isDarkMode.value;
+    localStorage.setItem('theme', isDarkMode.value ? 'dark' : 'light');
+};
+
+watch(isDarkMode, (val) => {
+    document.documentElement.setAttribute('data-theme', val ? 'dark' : 'light');
+}, { immediate: true });
+
+const getMethodColor = (m) => {
+  const map = { GET: '#4ec9b0', POST: '#569cd6', PUT: '#dcdcaa', DELETE: '#f44747' };
+  if (!isDarkMode.value) {
+     const lightMap = { GET: '#059669', POST: '#2563eb', PUT: '#d97706', DELETE: '#dc2626' };
+     return lightMap[m] || '#666';
+  }
+  return map[m] || '#cccccc';
+};
+
+const getStatusClass = (s) => {
+  if (s < 300) return 'c-2xx';
+  if (s < 400) return 'c-3xx';
+  if (s < 500) return 'c-4xx';
+  return 'c-5xx';
+};
+
+const parseTime = (raw) => {
+  if (!raw) return '--:--:--';
+  const parts = raw.split(':');
+  if (parts.length >= 4) {
+    return parts.slice(1, 4).join(':').split(' ')[0];
+  }
+  return raw;
+};
+
+let socket = null;
+
 const connect = () => {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const host = window.location.host; 
@@ -216,10 +259,19 @@ const fetchStats = async () => {
 
 const fetchHistory = async () => {
   try {
-    const history = await (await fetch('/api/history')).json();
+    const response = await fetch('/api/history');
+    const history = await response.json();
     if (history) {
-        logs.value = history.reverse().map(l => ({...l, timeOnly: parseTime(l.time)})).map(Object.freeze);
-        nextTick(() => { if(listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight; });
+        logs.value = history.reverse().map(l => ({
+            ...l, 
+            timeOnly: parseTime(l.time),
+            id: l.id || Math.random()
+        })).map(Object.freeze);
+        
+        nextTick(() => { 
+            updateContainerHeight();
+            if(listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight; 
+        });
     }
   } catch(e){}
 };
