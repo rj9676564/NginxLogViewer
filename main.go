@@ -329,26 +329,32 @@ func buildRegexFromNginx(format string) *regexp.Regexp {
 	format = strings.TrimSpace(format)
 
 	// Reference mapping: nginx variable -> regex named group
-	replacements := map[string]string{
-		"$remote_addr":     `(?P<ip>\S+)`,
-		"$remote_user":     `(?P<user>\S*)`,
-		"$time_local":      `(?P<time>[^\]]+)`,
-		"$request":         `(?P<method>\S+)\s+(?P<path>\S+)\s+(?P<proto>[^"]*)`,
-		"$status":          `(?P<status>\d+)`,
-		"$body_bytes_sent": `(?P<bytes>\d*)`,
-		"$http_referer":    `(?P<referer>[^"]*)`,
-		"$http_user_agent": `(?P<ua>[^"]*)`,
-		"$query_string":    `(?P<query>[^"]*)`,
-		"$request_body":    `(?P<body>.*)`,
+	// IMPORTANT: Order matters! Longer variable names must be replaced first
+	// to prevent $request from being replaced inside $request_body
+	replacements := []struct{
+		key string
+		val string
+	}{
+		{"$body_bytes_sent", `(?P<bytes>\d*)`},
+		{"$http_user_agent", `(?P<ua>[^"]*)`},
+		{"$http_referer", `(?P<referer>[^"]*)`},
+		{"$request_body", `(?P<body>.*)`},
+		{"$query_string", `(?P<query>[^"]*)`},
+		{"$remote_addr", `(?P<ip>\S+)`},
+		{"$remote_user", `(?P<user>\S*)`},
+		{"$time_local", `(?P<time>[^\]]+)`},
+		{"$request", `(?P<method>\S+)\s+(?P<path>\S+)\s+(?P<proto>[^"]*)`},
+		{"$status", `(?P<status>\d+)`},
 	}
 
 	// 1. Escape regex special characters from the format string
 	res := regexp.QuoteMeta(format)
 
 	// 2. Handle nginx variables (convert back from quoted \$ to group)
-	for k, v := range replacements {
-		escapedVar := regexp.QuoteMeta(k)
-		res = strings.ReplaceAll(res, escapedVar, v)
+	// Process in order to avoid substring replacement issues
+	for _, r := range replacements {
+		escapedVar := regexp.QuoteMeta(r.key)
+		res = strings.ReplaceAll(res, escapedVar, r.val)
 	}
 
 	// 3. Handle flexible whitespace: any space in format can match one or more spaces
