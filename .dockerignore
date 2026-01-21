@@ -1,0 +1,37 @@
+# Git
+.git
+.gitignore
+.github
+
+# Documentation
+README.md
+*.md
+
+# Development files
+.DS_Store
+.vscode
+.idea
+
+# Logs
+*.log
+access.log
+
+# Scripts
+*.sh
+
+# Frontend build artifacts (will be built in Docker)
+frontend/node_modules
+frontend/dist
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Misc
+headers.txt
+gen_log_go.go
