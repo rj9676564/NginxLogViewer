@@ -76,8 +76,12 @@ jobs:
             VERSION=${{ steps.version.outputs.version }}
             BUILD_TIME=${{ steps.version.outputs.build_time }}
             GIT_COMMIT=${{ steps.version.outputs.git_commit }}
-          cache-from: type=gha
+          cache-from: |
+            type=gha
+            type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
 
       - name: Image digest
         run: echo ${{ steps.build-and-push.outputs.digest }}

@@ -6,22 +6,34 @@
 # Documentation
 README.md
 *.md
+LICENSE
 
 # Development files
 .DS_Store
 .vscode
 .idea
+*.swp
+*.swo
+*~
 
 # Logs
 *.log
 access.log
+logs.db
+logs.db-*
 
 # Scripts
 *.sh
 
+# Test files
+*_test.go
+test_*.go
+
 # Frontend build artifacts (will be built in Docker)
 frontend/node_modules
 frontend/dist
+frontend/.vite
+frontend/.cache
 
 # Go build artifacts
 *.exe
@@ -31,7 +43,20 @@ frontend/dist
 *.dylib
 *.test
 *.out
+vendor/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github/
 
 # Misc
 headers.txt
 gen_log_go.go
+tmp/
+.env
+.env.*
+
