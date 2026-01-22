@@ -38,8 +38,12 @@ docker run -d \
   -p 58080:58080 \
   -v /var/log/nginx/access.log:/logs/access.log:ro \
   -e LOG_FILE=/logs/access.log \
+  -e LOG_FORMAT='$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" "$request_body"' \
   docker.io/rj9676564/nginx-log-viewer:latest
 ```
+
+> **Tip**: Alternatively, you can mount a `config.json` file and use the `-config` flag:
+> `docker run -d -v ./config.json:/app/config.json:ro -p 58080:58080 rj9676564/nginx-log-viewer -config /app/config.json`
 
 ### 2. Run with Docker Compose
 
@@ -55,6 +59,7 @@ services:
       - /var/log/nginx/access.log:/var/log/nginx/access.log:ro
     environment:
       - LOG_FILE=/var/log/nginx/access.log
+      - LOG_FORMAT=$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" "$request_body"
     restart: always
 ```
 
@@ -85,10 +90,28 @@ services:
 
 | Flag / Env | Config Key | Default | Description |
 | :--- | :--- | :--- | :--- |
+| `-config` | - | - | Path to a JSON configuration file |
 | `-addr` / `LISTEN_ADDR` | `addr` | `:58080` | Server address |
 | `-file` / `LOG_FILE` | `log_file` | `/var/log/nginx/access.log` | Path to log file |
 | `-format` / `LOG_FORMAT` | `log_format` | (Custom) | Nginx `log_format` string |
 | `-db` / `DB_PATH` | `db_path` | `./logs.db` | SQLite storage path |
+
+### Configuration Methods
+Sonic Stellar supports multiple configuration methods with the following priority (highest to lowest):
+1.  **Command-line Flags**
+2.  **Environment Variables**
+3.  **JSON Configuration File** (via `-config`)
+4.  **Default Values**
+
+#### Example `config.json`
+```json
+{
+    "addr": ":58080",
+    "log_file": "/var/log/nginx/access.log",
+    "log_format": "$remote_addr - $remote_user [$time_local] \"$request\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\" \"$request_body\"",
+    "db_path": "./logs.db"
+}
+```
 
 ### Custom Log Format
 Sonic Stellar is designed to excel with custom formats. Example:
