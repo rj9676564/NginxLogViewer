@@ -1,8 +1,26 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import Components from 'unplugin-vue-components/resolvers'
+import ComponentsPlugin from 'unplugin-vue-components/vite'
+import { AntDesignVueResolver } from 'unplugin-vue-components/resolvers'
+import AutoImport from 'unplugin-auto-import/vite'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    AutoImport({
+      imports: ['vue'],
+      dts: false,
+    }),
+    ComponentsPlugin({
+      resolvers: [
+        AntDesignVueResolver({
+          importStyle: 'css-in-js', // Better for Vite
+        }),
+      ],
+      dts: false,
+    }),
+  ],
   server: {
     host: '0.0.0.0',
     proxy: {
