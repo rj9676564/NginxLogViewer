@@ -1,5 +1,5 @@
-# Stage 1: Build Frontend
-FROM node:20-alpine AS frontend-builder
+# Stage 1: Build Frontend (Only once on build host)
+FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-builder
 
 # Install pnpm
 ENV PNPM_HOME="/pnpm"

@@ -8,6 +8,7 @@
 - **npm ci instead of npm install**: Faster, reproducible builds using package-lock.json
 - **--prefer-offline --no-audit**: Skip unnecessary network requests and audits
 - **Better layer caching**: Copy package.json first, then source files
+- **Single Build via $BUILDPLATFORM**: Forced frontend to build only once on the host architecture (amd64). Since JS/CSS are architecture-independent, this removed the redundant and slow CPU-simulated build for arm64.
 
 #### Backend Build
 - **Go 1.24 Native Cross-Compilation**: Uses `--platform=$BUILDPLATFORM` to run the Go compiler at native host speed (amd64) instead of using slow QEMU emulation for arm64. This reduced backend build time from ~5m to ~20s.
