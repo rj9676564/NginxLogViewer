@@ -5,8 +5,9 @@
         <a-avatar size="small" style="background-color: var(--accent-color)"><template #icon>⚡️</template></a-avatar>
         Sonic Stellar
       </div>
-      
-      <a-input-search v-model:value="searchText" placeholder="Filter (Cmd+K)" allow-clear style="margin-bottom: 8px"></a-input-search>
+
+      <a-input-search v-model:value="searchText" placeholder="Filter (Cmd+K)" allow-clear
+        style="margin-bottom: 8px"></a-input-search>
 
       <div style="display: flex; gap: 8px;">
         <a-button type="primary" :danger="isPaused" @click="togglePause" block ghost>
@@ -24,21 +25,24 @@
       <!-- Stats Card -->
       <a-card size="small" :bordered="false" style="background: var(--card-bg); margin-top: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <span style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">STATISTICS</span>
-            <a-button type="text" size="small" @click="toggleTheme">
-                {{ isDarkMode ? '🌙' : '☀️' }}
-            </a-button>
+          <span style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">STATISTICS</span>
+          <a-button type="text" size="small" @click="toggleTheme">
+            {{ isDarkMode ? '🌙' : '☀️' }}
+          </a-button>
         </div>
-        
+
         <a-statistic title="Total Requests" :value="stats.pv" :value-style="{ color: varTextPrimary }"></a-statistic>
-        <div style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary);">
+        <div
+          style="margin-top: 8px; display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary);">
           <span>Unique Visitors</span>
           <span>{{ stats.uv }}</span>
         </div>
         <div style="margin-top: 4px; font-size: 12px; color: var(--text-secondary);">
-          Status: <span :style="{color: isConnected ? '#4ec9b0' : '#f44747'}">{{ isConnected ? 'Live' : 'Offline' }}</span>
+          Status: <span :style="{ color: isConnected ? '#4ec9b0' : '#f44747' }">{{ isConnected ? 'Live' : 'Offline'
+          }}</span>
         </div>
-        <a-button size="small" type="link" @click="fetchHistory" style="padding: 0; margin-top: 8px;">Load History</a-button>
+        <a-button size="small" type="link" @click="fetchHistory" style="padding: 0; margin-top: 8px;">Load
+          History</a-button>
       </a-card>
     </aside>
 
@@ -70,27 +74,33 @@
 
               <!-- Status -->
               <div class="col-status status-badge" :class="getStatusClass(log.status)">{{ log.status }}</div>
-              
+
               <!-- Method -->
               <div class="col-method" :style="{ color: getMethodColor(log.method) }">{{ log.method }}</div>
-              
+
               <!-- Path + Query + Body Icon -->
               <div class="col-path">
-                <template v-if="log.path">
+                <div class="path-container">
+                  <template v-if="log.path">
                     <span :title="log.path">{{ formatPath(log.path) }}</span>
                     <span v-if="getDisplayQuery(log)" class="query-string">?{{ getDisplayQuery(log) }}</span>
-                </template>
-                <template v-else>
-                    <span style="color: var(--text-secondary); opacity: 0.7; font-style: italic;">{{ log.raw }}</span>
-                </template>
-                
-                <!-- Antd Popover for Body (Hover) -->
-                <a-popover placement="bottom" title="Request Body" trigger="hover" v-if="log.body && log.body !== '-'">
-                  <template #content>
-                    <div class="popover-json" :style="{ color: isDarkMode ? '#e2e8f0' : '#333' }">{{ log.body }}</div>
                   </template>
-                  <a-tag color="orange" style="margin-left: 8px; cursor: pointer; border-radius: 2px;" @click="isPaused = true" title="Click to Pause & Inspect">BODY</a-tag>
-                </a-popover>
+                  <template v-else>
+                    <span style="color: var(--text-secondary); opacity: 0.7; font-style: italic;">{{ log.raw }}</span>
+                  </template>
+                </div>
+
+                <!-- Antd Popover for Body (Hover) -->
+                <div class="body-container">
+                  <a-popover placement="bottom" title="Request Body" trigger="hover"
+                    v-if="log.body && log.body !== '-'">
+                    <template #content>
+                      <div class="popover-json" :style="{ color: isDarkMode ? '#e2e8f0' : '#333' }">{{ log.body }}</div>
+                    </template>
+                    <a-tag color="orange" style="margin-left: 8px; cursor: pointer; border-radius: 2px;"
+                      @click="isPaused = true" title="Click to Pause & Inspect">BODY</a-tag>
+                  </a-popover>
+                </div>
               </div>
 
               <!-- Meta -->
@@ -154,10 +164,10 @@ const updateContainerHeight = () => {
 let flushTimer = null;
 const flushLogs = () => {
   if (renderBuffer.value.length === 0) return;
-  
+
   const newLogs = [...logs.value, ...renderBuffer.value];
   renderBuffer.value = [];
-  
+
   // Keep limit
   if (newLogs.length > maxLogs) {
     logs.value = newLogs.slice(newLogs.length - maxLogs);
@@ -179,7 +189,7 @@ const flushLogs = () => {
 const addLog = (entry) => {
   entry.timeOnly = parseTime(entry.time);
   const frozen = Object.freeze(entry);
-  
+
   if (isPaused.value) {
     backlog.value.push(frozen);
     return;
@@ -187,7 +197,7 @@ const addLog = (entry) => {
 
   renderBuffer.value.push(frozen);
   if (!flushTimer) {
-     flushTimer = setInterval(flushLogs, 100); // 10 FPS for updates is plenty and saves CPU
+    flushTimer = setInterval(flushLogs, 100); // 10 FPS for updates is plenty and saves CPU
   }
 };
 
@@ -195,8 +205,8 @@ const filteredLogs = computed(() => {
   const all = logs.value;
   if (!searchText.value) return all;
   const q = searchText.value.toLowerCase();
-  return all.filter(l => 
-    (l.path && l.path.toLowerCase().includes(q)) || 
+  return all.filter(l =>
+    (l.path && l.path.toLowerCase().includes(q)) ||
     (l.ip && l.ip.includes(q)) ||
     (l.status && String(l.status).includes(q))
   );
@@ -205,19 +215,19 @@ const filteredLogs = computed(() => {
 const varTextPrimary = computed(() => isDarkMode.value ? '#cccccc' : '#333333');
 
 const toggleTheme = () => {
-    isDarkMode.value = !isDarkMode.value;
-    localStorage.setItem('theme', isDarkMode.value ? 'dark' : 'light');
+  isDarkMode.value = !isDarkMode.value;
+  localStorage.setItem('theme', isDarkMode.value ? 'dark' : 'light');
 };
 
 watch(isDarkMode, (val) => {
-    document.documentElement.setAttribute('data-theme', val ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', val ? 'dark' : 'light');
 }, { immediate: true });
 
 const getMethodColor = (m) => {
   const map = { GET: '#4ec9b0', POST: '#569cd6', PUT: '#dcdcaa', DELETE: '#f44747' };
   if (!isDarkMode.value) {
-     const lightMap = { GET: '#059669', POST: '#2563eb', PUT: '#d97706', DELETE: '#dc2626' };
-     return lightMap[m] || '#666';
+    const lightMap = { GET: '#059669', POST: '#2563eb', PUT: '#d97706', DELETE: '#dc2626' };
+    return lightMap[m] || '#666';
   }
   return map[m] || '#cccccc';
 };
@@ -244,9 +254,9 @@ const getDisplayQuery = (log) => {
     // Otherwise try to extract from path
     q = log.path.split('?')[1];
   }
-  
+
   if (!q) return '';
-  
+
   try {
     return decodeURIComponent(q);
   } catch (e) {
@@ -267,19 +277,19 @@ let socket = null;
 
 const connect = () => {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  const host = window.location.host; 
+  const host = window.location.host;
   socket = new WebSocket(`${proto}://${host}/ws`);
   socket.onopen = () => isConnected.value = true;
   socket.onclose = () => { isConnected.value = false; setTimeout(connect, 2000); };
   socket.onmessage = e => {
     try {
       addLog(JSON.parse(e.data));
-    } catch(err) {}
+    } catch (err) { }
   };
 }
 
 const fetchStats = async () => {
-  try { stats.value = await (await fetch('/api/stats')).json(); } catch(e){}
+  try { stats.value = await (await fetch('/api/stats')).json(); } catch (e) { }
 }
 
 const fetchHistory = async () => {
@@ -287,37 +297,37 @@ const fetchHistory = async () => {
     const response = await fetch('/api/history');
     const history = await response.json();
     if (history) {
-        logs.value = history.reverse().map(l => ({
-            ...l, 
-            timeOnly: parseTime(l.time),
-            id: l.id || Math.random()
-        })).map(Object.freeze);
-        
-        nextTick(() => { 
-            updateContainerHeight();
-            if(listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight; 
-        });
+      logs.value = history.reverse().map(l => ({
+        ...l,
+        timeOnly: parseTime(l.time),
+        id: l.id || Math.random()
+      })).map(Object.freeze);
+
+      nextTick(() => {
+        updateContainerHeight();
+        if (listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight;
+      });
     }
-  } catch(e){}
+  } catch (e) { }
 };
 
 const togglePause = () => {
-    isPaused.value = !isPaused.value;
-    if (!isPaused.value) {
-        if (backlog.value.length > 0) {
-            logs.value = [...logs.value, ...backlog.value].slice(-maxLogs);
-            backlog.value = [];
-        }
-        nextTick(() => {
-            if(listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight;
-        });
+  isPaused.value = !isPaused.value;
+  if (!isPaused.value) {
+    if (backlog.value.length > 0) {
+      logs.value = [...logs.value, ...backlog.value].slice(-maxLogs);
+      backlog.value = [];
     }
+    nextTick(() => {
+      if (listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight;
+    });
+  }
 };
 
 const clearLogs = () => {
-    logs.value = [];
-    backlog.value = [];
-    renderBuffer.value = [];
+  logs.value = [];
+  backlog.value = [];
+  renderBuffer.value = [];
 };
 
 import { onUnmounted } from 'vue';
@@ -348,11 +358,11 @@ onUnmounted(() => {
   --row-hover: #2a2d2e;
   --text-primary: #cccccc;
   --text-secondary: #858585;
-  --card-bg: rgba(255,255,255,0.04);
+  --card-bg: rgba(255, 255, 255, 0.04);
   --accent-color: #007acc;
   --path-color: #d4d4d4;
   --header-text: #fff;
-  --tag-bg: rgba(255,255,255,0.1);
+  --tag-bg: rgba(255, 255, 255, 0.1);
   --tag-color: #ccc;
   --scrollbar-track: #1e1e1e;
   --scrollbar-thumb: #424242;
@@ -451,42 +461,119 @@ body {
   height: 36px;
 }
 
-.log-row:hover { background-color: var(--row-hover); }
-.header-row { 
-    background: var(--header-bg); 
-    font-weight: 600; 
-    color: var(--header-text); 
-    border-bottom: 2px solid var(--border-color); 
+.log-row:hover {
+  background-color: var(--row-hover);
 }
 
-.col-time { width: 80px; color: var(--text-secondary); white-space: nowrap; flex-shrink: 0; font-variant-numeric: tabular-nums; }
-.col-method { width: 50px; font-weight: 600; flex-shrink: 0; }
-.col-path { 
-  flex: 1; 
-  font-family: 'JetBrains Mono', monospace; 
-  white-space: nowrap; 
-  overflow: hidden; 
-  text-overflow: ellipsis; 
+.header-row {
+  background: var(--header-bg);
+  font-weight: 600;
+  color: var(--header-text);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.col-time {
+  width: 80px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.col-method {
+  width: 50px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.col-path {
+  flex: 1;
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--path-color);
   display: flex;
   align-items: center;
   gap: 8px;
+
+  .path-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .body-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
 }
-.col-status { width: 50px; flex-shrink: 0; text-align: center; }
-.col-meta { width: 140px; display: flex; gap: 4px; justify-content: flex-end; flex-shrink: 0; }
-.meta-tag { background: var(--tag-bg) !important; color: var(--tag-color) !important; }
 
-.query-string { color: var(--accent-color); margin-left: 8px; opacity: 0.8; }
-.status-badge { font-weight: 600; }
-.c-2xx { color: #4ec9b0; }
-.c-3xx { color: #569cd6; }
-.c-4xx { color: #ce9178; }
-.c-5xx { color: #f44747; }
+.col-status {
+  width: 50px;
+  flex-shrink: 0;
+  text-align: center;
+}
 
-:root[data-theme='light'] .c-2xx { color: #059669; }
-:root[data-theme='light'] .c-3xx { color: #2563eb; }
-:root[data-theme='light'] .c-4xx { color: #d97706; }
-:root[data-theme='light'] .c-5xx { color: #dc2626; }
+.col-meta {
+  width: 140px;
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.meta-tag {
+  background: var(--tag-bg) !important;
+  color: var(--tag-color) !important;
+}
+
+.query-string {
+  color: var(--accent-color);
+  margin-left: 8px;
+  opacity: 0.8;
+}
+
+.status-badge {
+  font-weight: 600;
+}
+
+.c-2xx {
+  color: #4ec9b0;
+}
+
+.c-3xx {
+  color: #569cd6;
+}
+
+.c-4xx {
+  color: #ce9178;
+}
+
+.c-5xx {
+  color: #f44747;
+}
+
+:root[data-theme='light'] .c-2xx {
+  color: #059669;
+}
+
+:root[data-theme='light'] .c-3xx {
+  color: #2563eb;
+}
+
+:root[data-theme='light'] .c-4xx {
+  color: #d97706;
+}
+
+:root[data-theme='light'] .c-5xx {
+  color: #dc2626;
+}
 
 .popover-json {
   max-width: 400px;
@@ -498,7 +585,19 @@ body {
   word-break: break-all;
 }
 
-::-webkit-scrollbar { width: 10px; height: 10px; background: var(--scrollbar-track); }
-::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 5px; border: 2px solid var(--scrollbar-thumb-border); }
-::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 5px;
+  border: 2px solid var(--scrollbar-thumb-border);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
+}
 </style>
