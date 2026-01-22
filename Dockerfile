@@ -16,7 +16,7 @@ COPY frontend ./
 RUN npm run build
 
 # Stage 2: Build Backend
-FROM golang:1.24-alpine AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend-builder
 
 WORKDIR /src
 
@@ -27,17 +27,19 @@ RUN go mod download
 # Copy source code
 COPY *.go ./
 
-# Build arguments
+# Build arguments provided by Docker Buildx
 ARG TARGETOS
 ARG TARGETARCH
 ARG BUILD_TIME
 ARG GIT_COMMIT
 ARG VERSION
 
-# Build with optimizations
+# Build with native speed using Go's cross-compilation
+# --platform=$BUILDPLATFORM ensures the compiler runs on the host architecture (fast)
+# GOARCH=$TARGETARCH tells Go which architecture to target
 RUN CGO_ENABLED=0 \
-    GOOS=${TARGETOS:-linux} \
-    GOARCH=${TARGETARCH:-amd64} \
+    GOOS=$TARGETOS \
+    GOARCH=$TARGETARCH \
     go build -trimpath -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}' -X 'main.GitCommit=${GIT_COMMIT}'" \
     -o /out/nginx-log-viewer .
 
