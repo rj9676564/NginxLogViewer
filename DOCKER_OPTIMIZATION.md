@@ -10,9 +10,9 @@
 - **Better layer caching**: Copy package.json first, then source files
 
 #### Backend Build
-- **Go 1.23 instead of 1.24**: Use stable released version
+- **Go 1.24 Native Cross-Compilation**: Uses `--platform=$BUILDPLATFORM` to run the Go compiler at native host speed (amd64) instead of using slow QEMU emulation for arm64. This reduced backend build time from ~5m to ~20s.
 - **-trimpath flag**: Removes file system paths from binary (smaller size, better reproducibility)
-- **Optimized ldflags**: `-s -w` removes debug info and symbol table
+- **Optimized ldflags**: `-s -w` removes debug info and symbol table.
 
 #### Runtime Image
 - **Alpine 3.19**: Specific version for better reproducibility
