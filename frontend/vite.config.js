@@ -14,12 +14,19 @@ export default defineConfig({
     ComponentsPlugin({
       resolvers: [
         AntDesignVueResolver({
-          importStyle: 'css-in-js', // Better for Vite
+          importStyle: 'less', // We will use less since you installed it
         }),
       ],
       dts: false,
     }),
   ],
+  css: {
+    preprocessorOptions: {
+      less: {
+        javascriptEnabled: true,
+      },
+    },
+  },
   server: {
     host: '0.0.0.0',
     proxy: {
