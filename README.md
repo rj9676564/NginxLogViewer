@@ -1,131 +1,111 @@
-# Nginx Log Viewer 🚀
+# Sonic Stellar: Nginx Log Viewer 🚀
 
-A lightweight, real-time Nginx log visualization tool built with Go and Vue.js.
+**Sonic Stellar** is a high-performance, real-time Nginx log visualization and analysis tool. Built with a Go 1.24 backend and a Vue 3 + Vite frontend, it provides an instantaneous, beautiful, and searchable view of your server traffic.
 
 ![Build Status](https://github.com/rj9676564/NginxLogViewer/actions/workflows/docker-publish.yml/badge.svg)
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Go](https://img.shields.io/badge/go-1.23+-00ADD8.svg)
-![Vue](https://img.shields.io/badge/vue-3.x-4FC08D.svg)
+![Go Version](https://img.shields.io/badge/go-1.24-00ADD8.svg)
+![Vue Version](https://img.shields.io/badge/vue-3.x-4FC08D.svg)
+![Docker Multi-Arch](https://img.shields.io/badge/docker-multi--arch-blue.svg)
 
 ## ✨ Features
 
-- **Real-time Streaming**: Watch your logs flow in milliseconds using WebSockets.
-- **Low Resource Usage**: Backend written in Go for minimal memory footprint and high performance.
-- **Rich Visualization**: 
-  - Color-coded HTTP status codes (2xx, 3xx, 4xx, 5xx).
-  - Explicit parsing and display of `Query Strings` and `POST Body`.
-- **Powerful Filtering**: Filter logs instantly using Regex or simple text matching.
-- **Customizable**: Configure your Nginx `log_format` directly in the UI to match your server configuration.
-- **Single-File Frontend**: No `npm install` or complex build steps required. Just one HTML file using Vue 3 via CDN.
-- **Docker Ready**: Easy deployment with Docker and Docker Compose.
+-   **⚡ Real-time Streaming**: Watch logs flow in with millisecond latency via WebSockets.
+-   **🔍 Intelligent Parsing**: Robust regex-based parsing that supports standard `combined` formats and complex custom formats (including `$request_body`, `$query_string`, and JSON fields).
+-   **🚀 Performance First**:
+    -   **Backend**: Compiled Go 1.24 binary with minimal memory footprint.
+    -   **Frontend**: Virtualized list rendering for handling thousands of log lines without lag.
+    -   **CI/CD**: Optimized multi-arch Docker builds (amd64/arm64) that complete in < 1.5 minutes.
+-   **🎨 Premium UI/UX**:
+    -   **Modern Aesthetics**: Built with Ant Design Vue for a clean, professional look.
+    -   **Dark/Light Mode**: Seamless theme switching with persistence.
+    -   **Smart Context**: Auto-decodes URL-encoded query strings and formats JSON request bodies for humans.
+-   **📈 Built-in Analytics**: Real-time PV/UV tracking and status code distribution.
+-   **🐳 Cloud Native**: Production-ready Docker images with extremely small footprints using Alpine Linux.
 
 ## 🛠️ Tech Stack
 
-- **Backend**: Go (Golang), `gorilla/websocket`, `hpcloud/tail`
-- **Frontend**: HTML5, CSS3, Vue.js 3 (Composition API)
+-   **Backend**: Go 1.24, Gorilla WebSockets, SQLite (for history).
+-   **Frontend**: Vue 3 (Composition API), Vite, Ant Design Vue, pnpm.
+-   **DevOps**: Docker (Multi-stage + Multi-arch), GitHub Actions (BuildKit Cache).
 
-## 🚀 Getting Started
+## 🚀 Quick Start
+
+### 1. Run with Docker (Recommended)
+
+```bash
+docker run -d \
+  --name nginx-viewer \
+  -p 58080:58080 \
+  -v /var/log/nginx/access.log:/logs/access.log:ro \
+  -e LOG_FILE=/logs/access.log \
+  docker.io/rj9676564/nginx-log-viewer:latest
+```
+
+### 2. Run with Docker Compose
+
+Edit your `docker-compose.yml`:
+
+```yaml
+services:
+  log-viewer:
+    image: rj9676564/nginx-log-viewer:latest
+    ports:
+      - "58080:58080"
+    volumes:
+      - /var/log/nginx/access.log:/var/log/nginx/access.log:ro
+    environment:
+      - LOG_FILE=/var/log/nginx/access.log
+    restart: always
+```
+
+## 🛠️ Development Setup
 
 ### Prerequisites
+-   Go 1.24+
+-   Node.js 20+
+-   pnpm 9+
 
-- Go 1.20+ (for local run)
-- Docker (optional, for containerized deployment)
+### Local Environment
 
-### Running Locally
+1.  **Start Backend**:
+    ```bash
+    go mod download
+    go run main.go -file /path/to/your/access.log
+    ```
 
-1. Clone the repository:
-   ```bash
-   git clone git@github.com:rj9676564/NginxLogViewer.git
-   cd NginxLogViewer
-   ```
-
-2. Run the server:
-   ```bash
-   # Listen on port 58080 and watch a specific log file
-   go run main.go -addr :58080 -file /var/log/nginx/access.log
-   ```
-
-## Run Locally
-
-### 1. Start Backend (Go)
-The backend serves the API and WebSocket at port `58080`.
-```bash
-go mod tidy
-go run main.go -file /path/to/access.log
-# Ensure to pass a valid log file path
-```
-
-### 2. Start Frontend (Vue + Vite)
-In a new terminal, start the frontend dev server. It will proxy API requests to the backend.
-```bash
-cd frontend
-npm install
-npm run dev
-```
-Access the UI at `http://localhost:5173`.
-
-## Docker Build
-
-The Dockerfile is a multi-stage build that compiles both the frontend (Node.js) and backend (Go).
-
-```bash
-docker build -t nginx-log-viewer .
-docker run -p 58080:58080 -v /var/log/nginx/access.log:/var/log/nginx/access.log nginx-log-viewer
-```
-(When running via Docker, the Go server serves the static frontend files on port 58080). 
-   ```
-
-   **Or using Docker Compose:**
-
-   Edit `docker-compose.yml` to point to your log file, then run:
-   ```bash
-   docker-compose up -d
-   ```
+2.  **Start Frontend**:
+    ```bash
+    cd frontend
+    pnpm install
+    pnpm dev
+    ```
+    Access the dev portal at `http://localhost:5173`.
 
 ## ⚙️ Configuration
 
-The application can be configured via Command-line flags, Environment variables, or a JSON config file.
+| Flag / Env | Config Key | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `-addr` / `LISTEN_ADDR` | `addr` | `:58080` | Server address |
+| `-file` / `LOG_FILE` | `log_file` | `/var/log/nginx/access.log` | Path to log file |
+| `-format` / `LOG_FORMAT` | `log_format` | (Custom) | Nginx `log_format` string |
+| `-db` / `DB_PATH` | `db_path` | `./logs.db` | SQLite storage path |
 
-### Priority Order
-1. **Command-line Flags** (Highest)
-2. **Environment Variables**
-3. **JSON Config File** (`-config` flag)
-4. **Default Values** (Lowest)
-
-### Available Settings
-| Flag | Env Var | Config Key | Default | Description |
-|------|---------|------------|---------|-------------|
-| `-addr` | `LISTEN_ADDR` | `addr` | `:58080` | Server listening address |
-| `-file` | `LOG_FILE` | `log_file` | `/var/log/nginx/access.log` | Path to Nginx log file |
-| `-format`| `LOG_FORMAT` | `log_format` | (Custom with POST_BODY) | Nginx `log_format` string |
-| `-db` | `DB_PATH` | `db_path` | `./logs.db` | Path to SQLite database |
-| `-config`| - | - | - | Path to JSON config file |
-
-### Example Config File (`config.json`)
-```json
-{
-    "addr": ":58080",
-    "log_file": "/var/log/nginx/access.log",
-    "log_format": "$remote_addr - $remote_user [$time_local] \"$request\" $status ..."
-}
-```
-
-### CLI Arguments
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-addr` | HTTP service address | `:58080` |
-| `-file` | Path to the log file to watch | `/var/log/nginx/access.log` |
-
-### Log Format
-
-The viewer supports custom Nginx log formats. click "Configure Format" in the sidebar to paste your format string. 
-
-**Default Format:**
+### Custom Log Format
+Sonic Stellar is designed to excel with custom formats. Example:
 ```nginx
-$remote_addr - $remote_user [$time_local] "$request" $status GET_ARGS: "$query_string" POST_BODY: "$request_body"
+log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                '$status $body_bytes_sent "$http_referer" '
+                '"$http_user_agent" "$request_body"';
 ```
+
+## 🏗️ Docker Build Optimization
+We take CI/CD performance seriously. Our current pipeline features:
+-   **Native Cross-Compilation**: Go builds for `arm64` run at native `amd64` speeds using `$BUILDPLATFORM`.
+-   **Frontend Tree Shaking**: Ant Design components are imported on-demand, reducing bundle size by 70%.
+-   **Cache Mounts**: Persistently caches `pnpm` store and `go mod` across builds.
+-   **Single-Phase Frontend**: Shared architectural assets are built only once for multi-platform images.
+
+Detailed optimization records can be found in [DOCKER_OPTIMIZATION.md](./DOCKER_OPTIMIZATION.md).
 
 ## 📄 License
-
-This project is licensed under the MIT License.
+MIT License - Developed by [rj9676564](https://github.com/rj9676564).
