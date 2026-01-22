@@ -1,19 +1,27 @@
 # Stage 1: Build Frontend
 FROM node:20-alpine AS frontend-builder
 
+# Install pnpm
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
 WORKDIR /app/frontend
 
-# Copy package files first for better caching
-COPY frontend/package*.json ./
+# Copy package.json and pnpm-lock.yaml (if exists) first
+COPY frontend/package.json ./
+COPY frontend/pnpm-lock.yaml* ./
 
-# Install dependencies with npm ci for faster, reproducible builds
-RUN npm ci --prefer-offline --no-audit
+# Install dependencies using a cache mount for the pnpm store
+# This makes subsequent builds incredibly fast
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile || pnpm install
 
 # Copy source files
 COPY frontend ./
 
 # Build frontend
-RUN npm run build
+RUN pnpm run build
 
 # Stage 2: Build Backend
 FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend-builder
@@ -22,7 +30,8 @@ WORKDIR /src
 
 # Copy go mod files first for better caching
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 # Copy source code
 COPY *.go ./
