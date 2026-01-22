@@ -77,8 +77,8 @@
               <!-- Path + Query + Body Icon -->
               <div class="col-path">
                 <template v-if="log.path">
-                    <span :title="log.path">{{ log.path }}</span>
-                    <span v-if="log.query && log.query !== '-'" class="query-string">?{{ log.query }}</span>
+                    <span :title="log.path">{{ formatPath(log.path) }}</span>
+                    <span v-if="getDisplayQuery(log)" class="query-string">?{{ getDisplayQuery(log) }}</span>
                 </template>
                 <template v-else>
                     <span style="color: var(--text-secondary); opacity: 0.7; font-style: italic;">{{ log.raw }}</span>
@@ -227,6 +227,31 @@ const getStatusClass = (s) => {
   if (s < 400) return 'c-3xx';
   if (s < 500) return 'c-4xx';
   return 'c-5xx';
+};
+
+const formatPath = (path) => {
+  if (!path) return '';
+  return path.split('?')[0];
+};
+
+const getDisplayQuery = (log) => {
+  let q = '';
+  // Favor log.query if it exists and is not '-'
+  if (log.query && log.query !== '-') {
+    q = log.query;
+    if (q.startsWith('?')) q = q.substring(1);
+  } else if (log.path && log.path.includes('?')) {
+    // Otherwise try to extract from path
+    q = log.path.split('?')[1];
+  }
+  
+  if (!q) return '';
+  
+  try {
+    return decodeURIComponent(q);
+  } catch (e) {
+    return q;
+  }
 };
 
 const parseTime = (raw) => {
