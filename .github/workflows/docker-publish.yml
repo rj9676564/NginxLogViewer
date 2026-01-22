@@ -77,7 +77,7 @@ jobs:
           cache-from: |
             type=gha
             type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=gha,mode=max
+          cache-to: type=gha
           provenance: false
           sbom: false
 
