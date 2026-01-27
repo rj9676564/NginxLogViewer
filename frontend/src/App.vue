@@ -217,13 +217,16 @@
           </div>
         </div>
 
-        <div class="detail-section">
-          <h3>Request</h3>
-          <div class="grid-item full"><span>Path</span><code class="code-block">{{ selectedLog.path }}</code></div>
-          <div class="grid-item full" v-if="selectedLog.query"><span>Query</span><code class="code-block">{{
-              selectedLog.query }}</code></div>
-          <div class="grid-item full" v-if="selectedLog.body"><span>Body</span><code class="code-block">{{
-              selectedLog.body }}</code></div>
+        <div class="detail-section" v-if="selectedLog.query || selectedLog.body">
+          <h3>Request Payload</h3>
+          <div class="grid-item full" v-if="selectedLog.query && selectedLog.query !== '-'">
+            <span>Query Parameters</span>
+            <code class="code-block">{{ selectedLog.query }}</code>
+          </div>
+          <div class="grid-item full" v-if="selectedLog.body && selectedLog.body !== '-'">
+            <span>Body</span>
+            <pre class="code-block-pre"><code>{{ formatBody(selectedLog.body) }}</code></pre>
+          </div>
         </div>
 
         <div class="detail-section">
@@ -494,6 +497,16 @@ const formatClient = (id) => {
   if (!id || id === 'unknow') return 'Unknown';
   if (id.length <= 6) return id;
   return id.substring(id.length - 6);
+};
+
+const formatBody = (body) => {
+  if (!body || body === '-') return '';
+  try {
+    const obj = JSON.parse(body);
+    return JSON.stringify(obj, null, 2);
+  } catch (e) {
+    return body;
+  }
 };
 
 const getDisplayQuery = (log) => {
@@ -1077,6 +1090,23 @@ body {
   white-space: pre-wrap;
   word-break: break-all;
   border: 1px solid var(--border-color);
+}
+
+.code-block-pre {
+  margin: 0;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 0;
+}
+
+.code-block-pre code {
+  display: block;
+  padding: 12px;
+  color: var(--accent-color);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  white-space: pre;
+  overflow-x: auto;
 }
 
 .ua-text {
