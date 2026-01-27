@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -553,6 +554,85 @@ func handleBatchLog(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf("Processed %d logs", len(entries))))
 }
 
+func handlePushLog(hub *Hub, w http.ResponseWriter, r *http.Request) {
+	// /api/log/push/:device_id
+	deviceID := strings.TrimPrefix(r.URL.Path, "/api/log/push/")
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Read error", http.StatusInternalServerError)
+		return
+	}
+
+	content := string(body)
+	if content == "" {
+		http.Error(w, "Empty body", http.StatusBadRequest)
+		return
+	}
+
+	var entry *LogEntry
+	nowStr := time.Now().Format("02/Jan/2006:15:04:05 -0700")
+	nowUnix := time.Now().Unix()
+
+	// Try JSON first
+	var incoming IncomingLog
+	if json.Unmarshal(body, &incoming) == nil && (incoming.Text != "" || incoming.Body != "") {
+		entry = &LogEntry{
+			IP:        r.RemoteAddr,
+			Time:      nowStr,
+			Method:    "PUSH",
+			Path:      "/api/log/push",
+			Status:    200,
+			DeviceID:  deviceID,
+			Level:     incoming.Level,
+			Tag:       incoming.Tag,
+			Query:     incoming.Text,
+			Body:      incoming.Body,
+			CreatedAt: nowUnix,
+			Raw:       fmt.Sprintf("[%s] %s: %s", incoming.Level, incoming.Tag, incoming.Text),
+		}
+	} else {
+		// Treat as raw text
+		entry = &LogEntry{
+			IP:        r.RemoteAddr,
+			Time:      nowStr,
+			Method:    "PUSH",
+			Path:      "/api/log/push",
+			Status:    200,
+			DeviceID:  deviceID,
+			Level:     r.URL.Query().Get("level"),
+			Tag:       r.URL.Query().Get("tag"),
+			Query:     content,
+			CreatedAt: nowUnix,
+			Raw:       content,
+		}
+	}
+
+	if entry.Level == "" {
+		entry.Level = "info"
+	}
+
+	// UA Parsing
+	entry.UA = r.Header.Get("User-Agent")
+	if entry.UA != "" {
+		ua := user_agent.New(entry.UA)
+		browser, version := ua.Browser()
+		entry.Browser = fmt.Sprintf("%s %s", browser, version)
+		entry.OS = ua.OS()
+		if ua.Mobile() {
+			entry.Device = "Mobile"
+		} else {
+			entry.Device = "Desktop"
+		}
+	}
+
+	saveLog(entry)
+	hub.broadcast <- entry
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
+}
+
 // buildRegexFromNginx converts an Nginx log_format string into a regular expression
 func buildRegexFromNginx(format string) *regexp.Regexp {
 	// Normalize format: remove newlines and collapse multiple spaces
@@ -808,6 +888,9 @@ func main() {
 	http.HandleFunc("/api/tags", handleTags)
 	http.HandleFunc("/api/log/batch/", func(w http.ResponseWriter, r *http.Request) {
 		handleBatchLog(hub, w, r)
+	})
+	http.HandleFunc("/api/log/push/", func(w http.ResponseWriter, r *http.Request) {
+		handlePushLog(hub, w, r)
 	})
 
 	http.HandleFunc("/log/", func(w http.ResponseWriter, r *http.Request) {

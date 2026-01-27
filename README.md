@@ -20,6 +20,7 @@
     -   **Dark/Light Mode**: Seamless theme switching with persistence.
     -   **Smart Context**: Auto-decodes URL-encoded query strings and formats JSON request bodies for humans.
 -   **📈 Built-in Analytics**: Real-time PV/UV tracking and status code distribution.
+-   **📚 [API Documentation](./API_DOCS.md)**: Dedicated endpoints for pushing logs from Android/iOS/Flutter clients.
 -   **🐳 Cloud Native**: Production-ready Docker images with extremely small footprints using Alpine Linux.
 
 ## 🛠️ Tech Stack

@@ -102,9 +102,15 @@
           <span style="font-weight: 600; font-size: 13px;">{{ logFile }}</span>
           <a-tag color="#2db7f5">{{ logs.length }} Events</a-tag>
         </div>
-        <a-button size="small" @click="exportCSV" title="Download filtered logs as CSV">
-          <template #icon>📥</template> Export CSV
-        </a-button>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <a-button size="small" @click="exportCSV" title="Download filtered logs as CSV">
+            <template #icon>📥</template> Export CSV
+          </a-button>
+          <a href="https://github.com/rj9676564/NginxLogViewer/blob/main/API_DOCS.md" target="_blank" class="docs-link" title="API Integration Guide" style="width: auto; padding: 0 10px;">
+            <span style="font-size: 16px;">📖</span>
+            <span style="font-size: 12px; font-weight: 600; margin-left: 6px; color: var(--text-primary);">DOCS</span>
+          </a>
+        </div>
       </div>
 
       <!-- Header Row -->
@@ -789,8 +795,27 @@ body {
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.docs-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--card-bg);
+  transition: all 0.2s;
+  text-decoration: none;
+  border: 1px solid var(--border-color);
+}
+
+.docs-link:hover {
+  background: var(--tag-bg);
+  border-color: var(--accent-color);
+  transform: translateY(-1px);
 }
 
 .brand .ant-avatar {
