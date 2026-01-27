@@ -13,7 +13,7 @@ services:
       - 'LISTEN_ADDR=:58080'
     volumes:
       # Mount your host log file to the container
-      - ./access.log:/var/log/nginx/access.log:ro
+      - /www/wwwlogs/log_post.log:/var/log/nginx/access.log:ro
       # Use a data directory for persistence to avoid file-mapping permission issues
       - ./data:/app/data
     command: ["./nginx-log-viewer", "-file", "/var/log/nginx/access.log", "-addr", ":58080", "-db", "/app/data/logs.db"]
