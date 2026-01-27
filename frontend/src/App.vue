@@ -2,33 +2,40 @@
   <div id="app-container">
     <aside class="sidebar">
       <div class="brand">
-        <a-avatar size="small" style="background-color: var(--accent-color)"><template #icon>⚡️</template></a-avatar>
-        Sonic Stellar
+        <a-avatar :size="32" shape="square">SS</a-avatar>
+        <span>Sonic Stellar</span>
       </div>
 
-      <a-input-search v-model:value="searchText" placeholder="Filter text..." allow-clear
-        style="margin-bottom: 8px"></a-input-search>
+      <div class="filter-section">
+        <div class="search-wrapper">
+          <a-input v-model:value="searchText" placeholder="Search logs..." allow-clear class="modern-search">
+            <template #prefix>🔍</template>
+          </a-input>
+        </div>
 
-      <a-select v-model:value="selectedDevice" placeholder="Search/Select Device" show-search allow-clear
-        style="width: 100%; margin-bottom: 8px" @change="handleFilterChange">
-        <template #suffixIcon>📱</template>
-        <a-select-option v-for="d in devices" :key="d" :value="d">{{ d }}</a-select-option>
-      </a-select>
+        <div class="select-group">
+          <a-select v-model:value="selectedDevice" placeholder="Device" show-search allow-clear
+            @change="handleFilterChange" class="modern-select">
+            <template #suffixIcon>📱</template>
+            <a-select-option v-for="d in devices" :key="d" :value="d">{{ d }}</a-select-option>
+          </a-select>
 
-      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-        <a-select v-model:value="selectedLevel" placeholder="Level" allow-clear
-          style="flex: 1" @change="handleFilterChange">
-          <template #suffixIcon>📊</template>
-          <a-select-option value="v">Verbose</a-select-option>
-          <a-select-option value="d">Debug</a-select-option>
-          <a-select-option value="e">Error</a-select-option>
-        </a-select>
-        
-        <a-select v-model:value="selectedTag" placeholder="Tag" show-search allow-clear
-          style="flex: 1.5" @change="handleFilterChange">
-          <template #suffixIcon>🏷️</template>
-          <a-select-option v-for="t in tags" :key="t" :value="t">{{ t }}</a-select-option>
-        </a-select>
+          <div class="sub-filters">
+            <a-select v-model:value="selectedLevel" placeholder="Level" allow-clear
+              @change="handleFilterChange" class="modern-select level-select">
+              <template #suffixIcon>📊</template>
+              <a-select-option value="v">Verbose</a-select-option>
+              <a-select-option value="d">Debug</a-select-option>
+              <a-select-option value="e">Error</a-select-option>
+            </a-select>
+            
+            <a-select v-model:value="selectedTag" placeholder="Tag" show-search allow-clear
+              @change="handleFilterChange" class="modern-select tag-select">
+              <template #suffixIcon>🏷️</template>
+              <a-select-option v-for="t in tags" :key="t" :value="t">{{ t }}</a-select-option>
+            </a-select>
+          </div>
+        </div>
       </div>
 
       <div style="display: flex; gap: 8px;">
@@ -718,10 +725,68 @@ body {
   transition: all 0.2s !important;
 }
 
-.ant-input, .ant-select-selector {
-  border-radius: 8px !important;
-  background: rgba(110, 118, 129, 0.05) !important;
+.modern-search, .modern-select .ant-select-selector {
+  border-radius: 10px !important;
+  background: rgba(110, 118, 129, 0.08) !important;
   border: 1px solid var(--border-color) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  height: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 12px !important;
+}
+
+.modern-search:hover, .modern-select:hover .ant-select-selector {
+  border-color: var(--accent-color) !important;
+  background: rgba(110, 118, 129, 0.12) !important;
+}
+
+.modern-search.ant-input-affix-wrapper-focused, .ant-select-focused .ant-select-selector {
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2) !important;
+  border-color: var(--accent-color) !important;
+  background: var(--bg-color) !important;
+}
+
+.ant-input {
+  background: transparent !important;
+  border: none !important;
+}
+
+.ant-input:focus {
+  box-shadow: none !important;
+}
+
+.ant-select-selection-placeholder {
+  line-height: 38px !important;
+}
+
+.ant-select-selection-item {
+  line-height: 38px !important;
+  font-weight: 500;
+}
+
+.filter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modern-select {
+  width: 100%;
+}
+
+.sub-filters {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.level-select {
+  flex: 1;
+}
+
+.tag-select {
+  flex: 1.5;
 }
 
 .ant-card {
@@ -770,9 +835,6 @@ body {
   gap: 16px;
   transition: all 0.2s ease;
   height: 48px;
-  position: absolute;
-  left: 0;
-  right: 0;
 }
 
 .log-row:hover {
