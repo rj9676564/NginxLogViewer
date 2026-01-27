@@ -126,7 +126,7 @@
           <div :style="{ transform: `translateY(${offsetY}px)` }">
             <div v-for="log in visibleLogs" :key="log.id" class="log-row" @click="showDetail(log)">
               <!-- Time -->
-              <div class="col-time" :title="log.time">{{ log.timeOnly }}</div>
+              <div class="col-time" :title="log.time">{{ log.timeOnly || (log.time ? parseTime(log.time) : '--:--:--') }}</div>
 
               <!-- Level -->
               <div class="col-level">
@@ -549,7 +549,11 @@ const parseTime = (raw) => {
   // Handle ISO format: 2026-01-27T11:10:07.403091
   if (raw.includes('T')) {
     const timePart = raw.split('T')[1];
-    return timePart.split('.')[0];
+    const [hms, ms] = timePart.split('.');
+    if (ms) {
+      return hms + '.' + ms.substring(0, 3);
+    }
+    return hms.split(' ')[0];
   }
   // Handle Nginx format: [27/Jan/2026:11:10:07 +0800]
   const parts = raw.split(':');
@@ -667,7 +671,7 @@ import { onUnmounted } from 'vue';
 
 onMounted(() => {
   connect();
-  // fetchHistory();
+  fetchHistory();
   fetchDevices();
   fetchTags();
   setInterval(fetchStats, 5000);
@@ -915,10 +919,10 @@ body {
 }
 
 .col-time {
-  min-width: 85px;
+  min-width: 115px;
   color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
+  font-size: 11px;
   flex-shrink: 0;
 }
 
