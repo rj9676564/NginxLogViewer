@@ -8,9 +8,9 @@ services:
     ports:
       - "58080:58080"
     environment:
-      - LOG_FORMAT=$remote_addr - $remote_user [$time_local] "$request" $status GET_ARGS: "$query_string" POST_BODY: "$request_body"
+      - 'LOG_FORMAT=$remote_addr - $remote_user [$time_local] "$request" $status GET_ARGS: "$query_string" POST_BODY: "$request_body"'
       - LOG_FILE=/var/log/nginx/access.log
-      - LISTEN_ADDR=:58080
+      - 'LISTEN_ADDR=:58080'
     volumes:
       # Mount your host log file to the container
       # CHANGE ./access.log to your real log file path on host
