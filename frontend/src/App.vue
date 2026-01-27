@@ -182,6 +182,11 @@
                     <template #icon>🔍</template>
                   </a-button>
                 </div>
+                <a-tooltip v-if="log.device_id" :title="log.device_id">
+                  <a-tag color="blue" :bordered="false" class="meta-tag" @click.stop="selectedDevice = log.device_id; handleFilterChange()" style="cursor: pointer">
+                    {{ formatClient(log.device_id) }}
+                  </a-tag>
+                </a-tooltip>
                 <a-tooltip v-if="log.os" :title="log.ua">
                   <a-tag :bordered="false" class="meta-tag">{{ log.os }}</a-tag>
                 </a-tooltip>
@@ -483,6 +488,12 @@ const getStatusClass = (s) => {
 const formatPath = (path) => {
   if (!path) return '';
   return path.split('?')[0];
+};
+
+const formatClient = (id) => {
+  if (!id || id === 'unknow') return 'Unknown';
+  if (id.length <= 6) return id;
+  return id.substring(id.length - 6);
 };
 
 const getDisplayQuery = (log) => {
