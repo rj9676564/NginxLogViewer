@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"database/sql"
 	"encoding/json"
 	"flag"
@@ -61,6 +62,20 @@ var (
 	simpleRegex = regexp.MustCompile(`^(?P<ip>\S+) - \S+ \[(?P<time>[^\]]+)\] "(?P<request>[^"]+)" (?P<status>\d+) (?P<bytes>\d+) "-" "(?P<ua>[^"]+)"`)
 )
 
+// IncomingLog is what the client sends
+type IncomingLog struct {
+	Level string `json:"level"`
+	Tag   string `json:"tag"`
+	Text  string `json:"text"`
+	Time  string `json:"time"` // Optional
+	Body  string `json:"body"` // Structured data
+}
+
+type BatchRequest struct {
+	DeviceID string        `json:"device_id"`
+	Logs     []IncomingLog `json:"logs"`
+}
+
 // LogEntry roughly matches the DB schema and JSON output
 type LogEntry struct {
 	ID        int64  `json:"id"`
@@ -75,6 +90,9 @@ type LogEntry struct {
 	Browser   string `json:"browser"`
 	OS        string `json:"os"`
 	Device    string `json:"device"` // Note: mssola/user_agent doesn't always distinguish 'device' name well, but gives mobile bool
+	DeviceID  string `json:"device_id"`
+	Level     string `json:"level"`
+	Tag       string `json:"tag"`
 	Query     string `json:"query"`
 	Body      string `json:"body"`
 	Raw       string `json:"raw"`
@@ -236,6 +254,9 @@ func initDB() {
 		browser TEXT,
 		os TEXT,
 		device TEXT,
+		device_id TEXT,
+		level TEXT,
+		tag TEXT,
 		query TEXT,
 		body TEXT,
 		raw TEXT,
@@ -248,17 +269,22 @@ func initDB() {
 	
 	// Index for faster queries
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_created_at ON logs(created_at);`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_device_id ON logs(device_id);`)
+	
+	// Optimization for concurrent reads/writes
+	db.Exec(`PRAGMA journal_mode=WAL;`)
+	db.Exec(`PRAGMA synchronous=NORMAL;`)
 }
 
 func saveLog(e *LogEntry) {
-	stmt, err := db.Prepare(`INSERT INTO logs(ip, time, method, path, status, bytes, referer, ua, browser, os, device, query, body, raw, created_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+	stmt, err := db.Prepare(`INSERT INTO logs(ip, time, method, path, status, bytes, referer, ua, browser, os, device, device_id, level, tag, query, body, raw, created_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		log.Printf("DB Prepare error: %v", err)
 		return
 	}
 	defer stmt.Close()
 
-	res, err := stmt.Exec(e.IP, e.Time, e.Method, e.Path, e.Status, e.Bytes, e.Referer, e.UA, e.Browser, e.OS, e.Device, e.Query, e.Body, e.Raw, e.CreatedAt)
+	res, err := stmt.Exec(e.IP, e.Time, e.Method, e.Path, e.Status, e.Bytes, e.Referer, e.UA, e.Browser, e.OS, e.Device, e.DeviceID, e.Level, e.Tag, e.Query, e.Body, e.Raw, e.CreatedAt)
 	if err == nil {
 		id, _ := res.LastInsertId()
 		e.ID = id
@@ -267,8 +293,65 @@ func saveLog(e *LogEntry) {
 	}
 }
 
-func getRecentLogs(limit int) ([]*LogEntry, error) {
-	rows, err := db.Query("SELECT id, ip, time, method, path, status, bytes, referer, ua, browser, os, device, query, body, raw, created_at FROM logs ORDER BY id DESC LIMIT ?", limit)
+func saveLogBatch(entries []*LogEntry) {
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("TX Begin error: %v", err)
+		return
+	}
+	stmt, err := tx.Prepare(`INSERT INTO logs(ip, time, method, path, status, bytes, referer, ua, browser, os, device, device_id, level, tag, query, body, raw, created_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+	if err != nil {
+		log.Printf("TX Prepare error: %v", err)
+		tx.Rollback()
+		return
+	}
+	defer stmt.Close()
+
+	for _, e := range entries {
+		res, err := stmt.Exec(e.IP, e.Time, e.Method, e.Path, e.Status, e.Bytes, e.Referer, e.UA, e.Browser, e.OS, e.Device, e.DeviceID, e.Level, e.Tag, e.Query, e.Body, e.Raw, e.CreatedAt)
+		if err == nil {
+			id, _ := res.LastInsertId()
+			e.ID = id
+		}
+	}
+	tx.Commit()
+}
+
+func startCleanupTask() {
+	ticker := time.NewTicker(1 * time.Hour)
+	go func() {
+		for range ticker.C {
+			// Keep only last 100,000 logs
+			res, err := db.Exec("DELETE FROM logs WHERE id < (SELECT MIN(id) FROM (SELECT id FROM logs ORDER BY id DESC LIMIT 100000))")
+			if err == nil {
+				rows, _ := res.RowsAffected()
+				if rows > 0 {
+					log.Printf("[Cleanup] Removed %d old logs", rows)
+				}
+			}
+		}
+	}()
+}
+
+func getRecentLogs(limit int, deviceID, level, tag string) ([]*LogEntry, error) {
+	queryStr := "SELECT id, ip, time, method, path, status, bytes, referer, ua, browser, os, device, device_id, level, tag, query, body, raw, created_at FROM logs WHERE 1=1"
+	var args []interface{}
+	if deviceID != "" {
+		queryStr += " AND device_id = ?"
+		args = append(args, deviceID)
+	}
+	if level != "" {
+		queryStr += " AND level = ?"
+		args = append(args, level)
+	}
+	if tag != "" {
+		queryStr += " AND tag LIKE ?"
+		args = append(args, "%"+tag+"%")
+	}
+	queryStr += " ORDER BY id DESC LIMIT ?"
+	args = append(args, limit)
+
+	rows, err := db.Query(queryStr, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +360,7 @@ func getRecentLogs(limit int) ([]*LogEntry, error) {
 	var logs []*LogEntry
 	for rows.Next() {
 		e := &LogEntry{}
-		if err := rows.Scan(&e.ID, &e.IP, &e.Time, &e.Method, &e.Path, &e.Status, &e.Bytes, &e.Referer, &e.UA, &e.Browser, &e.OS, &e.Device, &e.Query, &e.Body, &e.Raw, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.IP, &e.Time, &e.Method, &e.Path, &e.Status, &e.Bytes, &e.Referer, &e.UA, &e.Browser, &e.OS, &e.Device, &e.DeviceID, &e.Level, &e.Tag, &e.Query, &e.Body, &e.Raw, &e.CreatedAt); err != nil {
 			continue
 		}
 		logs = append(logs, e)
@@ -307,9 +390,12 @@ func handleStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	json.NewEncoder(w).Encode(stats)
 }
-
 func handleHistory(w http.ResponseWriter, r *http.Request) {
-	logs, err := getRecentLogs(100)
+	q := r.URL.Query()
+	deviceID := q.Get("device")
+	level := q.Get("level")
+	tag := q.Get("tag")
+	logs, err := getRecentLogs(200, deviceID, level, tag)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -317,6 +403,154 @@ func handleHistory(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	json.NewEncoder(w).Encode(logs)
+}
+
+func handleDevices(w http.ResponseWriter, r *http.Request) {
+	rows, err := db.Query("SELECT DISTINCT device_id FROM logs WHERE device_id IS NOT NULL AND device_id != ''")
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	defer rows.Close()
+
+	var devices []string
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err == nil {
+			devices = append(devices, d)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	json.NewEncoder(w).Encode(devices)
+}
+
+func handleTags(w http.ResponseWriter, r *http.Request) {
+	rows, err := db.Query("SELECT DISTINCT tag FROM logs WHERE tag IS NOT NULL AND tag != ''")
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	defer rows.Close()
+
+	var tags []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err == nil {
+			tags = append(tags, t)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	json.NewEncoder(w).Encode(tags)
+}
+
+func handleReceiveLog(hub *Hub, w http.ResponseWriter, r *http.Request) {
+	// /log/:deviceid
+	path := r.URL.Path
+	deviceID := ""
+	if strings.HasPrefix(path, "/log/") {
+		deviceID = strings.TrimPrefix(path, "/log/")
+	}
+
+	entry := &LogEntry{
+		IP:        r.RemoteAddr,
+		Time:      time.Now().Format("02/Jan/2006:15:04:05 -0700"),
+		Method:    r.Method,
+		Path:      path,
+		Status:    200,
+		DeviceID:  deviceID,
+		Level:     r.URL.Query().Get("level"),
+		Tag:       r.URL.Query().Get("tag"),
+		Query:     r.URL.RawQuery,
+		CreatedAt: time.Now().Unix(),
+		Raw:       fmt.Sprintf("%s %s?%s", r.Method, path, r.URL.RawQuery),
+	}
+
+	// Try to get UA
+	entry.UA = r.Header.Get("User-Agent")
+	if entry.UA != "" {
+		ua := user_agent.New(entry.UA)
+		browser, version := ua.Browser()
+		entry.Browser = fmt.Sprintf("%s %s", browser, version)
+		entry.OS = ua.OS()
+		if ua.Mobile() {
+			entry.Device = "Mobile"
+		} else {
+			entry.Device = "Desktop"
+		}
+	}
+
+	saveLog(entry)
+	hub.broadcast <- entry
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
+}
+
+func handleBatchLog(hub *Hub, w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req BatchRequest
+	bodyReader := r.Body
+	if r.Header.Get("Content-Encoding") == "gzip" {
+		gr, err := gzip.NewReader(r.Body)
+		if err != nil {
+			http.Error(w, "Invalid Gzip", http.StatusBadRequest)
+			return
+		}
+		defer gr.Close()
+		bodyReader = gr
+	}
+	
+	if err := json.NewDecoder(bodyReader).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	deviceID := req.DeviceID
+	if deviceID == "" && strings.HasPrefix(r.URL.Path, "/api/log/batch/") {
+		deviceID = strings.TrimPrefix(r.URL.Path, "/api/log/batch/")
+	}
+
+	nowStr := time.Now().Format("02/Jan/2006:15:04:05 -0700")
+	nowUnix := time.Now().Unix()
+	var entries []*LogEntry
+
+	for _, l := range req.Logs {
+		logTime := l.Time
+		if logTime == "" {
+			logTime = nowStr
+		}
+
+		entry := &LogEntry{
+			IP:        r.RemoteAddr,
+			Time:      logTime,
+			Method:    "BATCH",
+			Path:      "/api/log/batch",
+			Status:    200,
+			DeviceID:  deviceID,
+			Level:     l.Level,
+			Tag:       l.Tag,
+			Query:     l.Text,
+			Body:      l.Body,
+			CreatedAt: nowUnix,
+			Raw:       fmt.Sprintf("[%s] %s: %s", l.Level, l.Tag, l.Text),
+			UA: r.Header.Get("User-Agent"),
+		}
+		entries = append(entries, entry)
+	}
+
+	saveLogBatch(entries)
+	for _, e := range entries {
+		hub.broadcast <- e
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(fmt.Sprintf("Processed %d logs", len(entries))))
 }
 
 // buildRegexFromNginx converts an Nginx log_format string into a regular expression
@@ -446,6 +680,41 @@ func parseLine(line string) *LogEntry {
 		}
 	}
 
+	// Extract DeviceID, Level, Tag from path/query if possible
+	if strings.Contains(entry.Path, "/log/") {
+		parts := strings.Split(entry.Path, "/")
+		for i, p := range parts {
+			if p == "log" && i+1 < len(parts) {
+				entry.DeviceID = strings.Split(parts[i+1], "?")[0]
+				break
+			}
+		}
+	}
+	
+	qStr := entry.Query
+	if qStr == "" && strings.Contains(entry.Path, "?") {
+		parts := strings.Split(entry.Path, "?")
+		if len(parts) > 1 {
+			qStr = parts[1]
+		}
+	}
+	
+	if qStr != "" {
+		// Manual simple parsing to avoid full URL parse complex objects
+		params := strings.Split(qStr, "&")
+		for _, p := range params {
+			kv := strings.SplitN(p, "=", 2)
+			if len(kv) == 2 {
+				switch kv[0] {
+				case "level":
+					entry.Level = kv[1]
+				case "tag":
+					entry.Tag = kv[1]
+				}
+			}
+		}
+	}
+
 	return entry
 }
 
@@ -518,6 +787,7 @@ func main() {
 	logRegex = buildRegexFromNginx(*formatStr)
 
 	initDB()
+	startCleanupTask()
 	
 	hub := newHub()
 	go hub.run()
@@ -534,6 +804,15 @@ func main() {
 	
 	http.HandleFunc("/api/history", handleHistory)
 	http.HandleFunc("/api/stats", handleStats)
+	http.HandleFunc("/api/devices", handleDevices)
+	http.HandleFunc("/api/tags", handleTags)
+	http.HandleFunc("/api/log/batch/", func(w http.ResponseWriter, r *http.Request) {
+		handleBatchLog(hub, w, r)
+	})
+
+	http.HandleFunc("/log/", func(w http.ResponseWriter, r *http.Request) {
+		handleReceiveLog(hub, w, r)
+	})
 
 	fmt.Printf("Server started at http://localhost%s\n", *addr)
 	fmt.Printf("Watching file: %s\n", *logFile)

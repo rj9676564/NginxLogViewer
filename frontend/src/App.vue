@@ -6,8 +6,30 @@
         Sonic Stellar
       </div>
 
-      <a-input-search v-model:value="searchText" placeholder="Filter (Cmd+K)" allow-clear
+      <a-input-search v-model:value="searchText" placeholder="Filter text..." allow-clear
         style="margin-bottom: 8px"></a-input-search>
+
+      <a-select v-model:value="selectedDevice" placeholder="Search/Select Device" show-search allow-clear
+        style="width: 100%; margin-bottom: 8px" @change="handleFilterChange">
+        <template #suffixIcon>📱</template>
+        <a-select-option v-for="d in devices" :key="d" :value="d">{{ d }}</a-select-option>
+      </a-select>
+
+      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+        <a-select v-model:value="selectedLevel" placeholder="Level" allow-clear
+          style="flex: 1" @change="handleFilterChange">
+          <template #suffixIcon>📊</template>
+          <a-select-option value="v">Verbose</a-select-option>
+          <a-select-option value="d">Debug</a-select-option>
+          <a-select-option value="e">Error</a-select-option>
+        </a-select>
+        
+        <a-select v-model:value="selectedTag" placeholder="Tag" show-search allow-clear
+          style="flex: 1.5" @change="handleFilterChange">
+          <template #suffixIcon>🏷️</template>
+          <a-select-option v-for="t in tags" :key="t" :value="t">{{ t }}</a-select-option>
+        </a-select>
+      </div>
 
       <div style="display: flex; gap: 8px;">
         <a-button type="primary" :danger="isPaused" @click="togglePause" block ghost>
@@ -37,20 +59,45 @@
           <span>Unique Visitors</span>
           <span>{{ stats.uv }}</span>
         </div>
-        <div style="margin-top: 4px; font-size: 12px; color: var(--text-secondary);">
-          Status: <span :style="{ color: isConnected ? '#4ec9b0' : '#f44747' }">{{ isConnected ? 'Live' : 'Offline'
-          }}</span>
+        <div style="margin-top: 4px; font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+          Status: <span :style="{ color: isConnected ? '#4ec9b0' : '#f44747' }">{{ isConnected ? 'Live' : 'Offline' }}</span>
+          <div v-if="isConnected" class="pulse-dot"></div>
         </div>
         <a-button size="small" type="link" @click="fetchHistory" style="padding: 0; margin-top: 8px;">Load
           History</a-button>
+      </a-card>
+
+      <!-- Color Config Card -->
+      <a-card size="small" :bordered="false" style="background: var(--card-bg); margin-top: 12px;">
+        <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">LEVEL COLORS
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 12px;">v (Verbose)</span>
+            <input type="color" v-model="levelColors.v" style="border:none; padding:0; width:24px; height:24px; cursor:pointer; background:transparent;" />
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 12px;">d (Debug)</span>
+            <input type="color" v-model="levelColors.d" style="border:none; padding:0; width:24px; height:24px; cursor:pointer; background:transparent;" />
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 12px;">e (Error)</span>
+            <input type="color" v-model="levelColors.e" style="border:none; padding:0; width:24px; height:24px; cursor:pointer; background:transparent;" />
+          </div>
+        </div>
       </a-card>
     </aside>
 
     <main class="main">
       <!-- Header Bar -->
       <div class="navbar">
-        <span style="font-weight: 600; font-size: 13px;">{{ logFile }}</span>
-        <a-tag color="#2db7f5">{{ logs.length }} Events</a-tag>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-weight: 600; font-size: 13px;">{{ logFile }}</span>
+          <a-tag color="#2db7f5">{{ logs.length }} Events</a-tag>
+        </div>
+        <a-button size="small" @click="exportCSV" title="Download filtered logs as CSV">
+          <template #icon>📥</template> Export CSV
+        </a-button>
       </div>
 
       <!-- Header Row -->
@@ -68,7 +115,7 @@
         <div :style="{ height: `${totalHeight}px`, position: 'relative' }">
           <!-- Offset wrapper for visible items -->
           <div :style="{ transform: `translateY(${offsetY}px)` }">
-            <div v-for="log in visibleLogs" :key="log.id || Math.random()" class="log-row">
+            <div v-for="log in visibleLogs" :key="log.id" class="log-row" @click="showDetail(log)">
               <!-- Time -->
               <div class="col-time" :title="log.time">{{ log.timeOnly }}</div>
 
@@ -79,11 +126,24 @@
               <div class="col-method" :style="{ color: getMethodColor(log.method) }">{{ log.method }}</div>
 
               <!-- Path + Query + Body Icon -->
-              <div class="col-path">
+              <div class="col-path" :style="getLogStyle(log)">
                 <div class="path-container">
+                  <template v-if="log.device_id">
+                    <a-tag size="small" color="blue" style="margin-right: 4px; font-size: 10px; cursor: pointer" @click="selectedDevice = log.device_id; handleFilterChange()">{{ log.device_id }}</a-tag>
+                  </template>
                   <template v-if="log.path">
-                    <span :title="log.path">{{ formatPath(log.path) }}</span>
-                    <span v-if="getDisplayQuery(log)" class="query-string">?{{ getDisplayQuery(log) }}</span>
+                    <template v-if="log.tag">
+                      <span style="background: var(--tag-bg); padding: 0 4px; border-radius: 3px; margin-right: 4px; font-weight: 600; cursor: pointer" @click.stop="selectedTag = log.tag; handleFilterChange()">{{ log.tag }}</span>
+                      <span style="font-weight: 500;" v-html="highlightText(getLogDetails(log).text || formatPath(log.path))"></span>
+                    </template>
+                    <template v-else-if="getLogDetails(log)">
+                      <span v-if="getLogDetails(log).tag" style="background: var(--tag-bg); padding: 0 4px; border-radius: 3px; margin-right: 4px; font-weight: 600; cursor: pointer" @click.stop="selectedTag = getLogDetails(log).tag; handleFilterChange()">{{ getLogDetails(log).tag }}</span>
+                      <span style="font-weight: 500;" v-html="highlightText(getLogDetails(log).text || formatPath(log.path))"></span>
+                    </template>
+                    <template v-else>
+                      <span :title="log.path" v-html="highlightText(formatPath(log.path))"></span>
+                    </template>
+                    <span v-if="getDisplayQuery(log) && !getLogDetails(log) && !log.tag" class="query-string" :style="getLogStyle(log)">?{{ getDisplayQuery(log) }}</span>
                   </template>
                   <template v-else>
                     <span style="color: var(--text-secondary); opacity: 0.7; font-style: italic;">{{ log.raw }}</span>
@@ -98,13 +158,21 @@
                       <div class="popover-json" :style="{ color: isDarkMode ? '#e2e8f0' : '#333' }">{{ log.body }}</div>
                     </template>
                     <a-tag color="orange" style="margin-left: 8px; cursor: pointer; border-radius: 2px;"
-                      @click="isPaused = true" title="Click to Pause & Inspect">BODY</a-tag>
+                      title="Click to Inspect Body">BODY</a-tag>
                   </a-popover>
                 </div>
               </div>
 
               <!-- Meta -->
               <div class="col-meta">
+                <div class="row-actions">
+                  <a-button type="text" size="small" @click.stop="copyLog(log)" title="Copy Log">
+                    <template #icon>📋</template>
+                  </a-button>
+                  <a-button type="text" size="small" @click.stop="showDetail(log)" title="View Details">
+                    <template #icon>🔍</template>
+                  </a-button>
+                </div>
                 <a-tooltip v-if="log.os" :title="log.ua">
                   <a-tag :bordered="false" class="meta-tag">{{ log.os }}</a-tag>
                 </a-tooltip>
@@ -117,6 +185,55 @@
         </div>
       </div>
     </main>
+
+    <!-- Detail Drawer -->
+    <a-drawer v-model:open="detailVisible" title="Log Entry Details" placement="right" width="600" :closable="true"
+      :body-style="{ padding: '0' }">
+      <div v-if="selectedLog" class="detail-content">
+        <div class="detail-section">
+          <h3>Basic Info</h3>
+          <div class="detail-grid">
+            <div class="grid-item"><span>ID</span><strong>{{ selectedLog.id }}</strong></div>
+            <div class="grid-item"><span>Time</span><strong>{{ selectedLog.time }}</strong></div>
+            <div class="grid-item"><span>Status</span><strong :class="getStatusClass(selectedLog.status)">{{
+                selectedLog.status }}</strong></div>
+            <div class="grid-item"><span>Method</span><strong :style="{ color: getMethodColor(selectedLog.method) }">{{
+                selectedLog.method }}</strong></div>
+            <div class="grid-item"><span>IP Address</span><strong>{{ selectedLog.ip }}</strong></div>
+          </div>
+        </div>
+
+        <div class="detail-section">
+          <h3>Request</h3>
+          <div class="grid-item full"><span>Path</span><code class="code-block">{{ selectedLog.path }}</code></div>
+          <div class="grid-item full" v-if="selectedLog.query"><span>Query</span><code class="code-block">{{
+              selectedLog.query }}</code></div>
+          <div class="grid-item full" v-if="selectedLog.body"><span>Body</span><code class="code-block">{{
+              selectedLog.body }}</code></div>
+        </div>
+
+        <div class="detail-section">
+          <h3>Client Details</h3>
+          <div class="detail-grid">
+            <div class="grid-item"><span>Device ID</span><a-tag color="blue">{{ selectedLog.device_id || 'N/A' }}</a-tag>
+            </div>
+            <div class="grid-item"><span>Level</span><a-tag :color="getLevelColor(selectedLog.level)">{{
+                selectedLog.level || 'info' }}</a-tag></div>
+            <div class="grid-item"><span>Tag</span><a-tag v-if="selectedLog.tag">{{ selectedLog.tag }}</a-tag></div>
+            <div class="grid-item"><span>Browser</span><strong>{{ selectedLog.browser }}</strong></div>
+            <div class="grid-item"><span>OS</span><strong>{{ selectedLog.os }}</strong></div>
+          </div>
+          <div class="grid-item full" style="margin-top: 12px;"><span>User Agent</span><div class="ua-text">{{
+              selectedLog.ua }}</div>
+          </div>
+        </div>
+
+        <div class="detail-section">
+          <h3>Raw Content</h3>
+          <pre class="raw-pre">{{ selectedLog.raw }}</pre>
+        </div>
+      </div>
+    </a-drawer>
   </div>
 </template>
 
@@ -133,6 +250,24 @@ const stats = ref({ pv: 0, uv: 0 });
 const listRef = ref(null);
 const logFile = ref('access.log');
 const isDarkMode = ref(localStorage.getItem('theme') !== 'light');
+
+const detailVisible = ref(false);
+const selectedLog = ref(null);
+
+const devices = ref([]);
+const tags = ref([]);
+const selectedDevice = ref(undefined);
+const selectedLevel = ref(undefined);
+const selectedTag = ref(undefined);
+const levelColors = ref(JSON.parse(localStorage.getItem('levelColors')) || {
+  v: isDarkMode.value ? '#cccccc' : '#000000',
+  d: '#007acc',
+  e: '#f44747'
+});
+
+watch(levelColors, (val) => {
+  localStorage.setItem('levelColors', JSON.stringify(val));
+}, { deep: true });
 
 // --- Virtual Scroll Logic ---
 const itemHeight = 36;
@@ -157,6 +292,11 @@ const handleScroll = (e) => {
 
 const updateContainerHeight = () => {
   if (listRef.value) containerHeight.value = listRef.value.clientHeight;
+};
+
+const handleFilterChange = () => {
+  clearLogs();
+  fetchHistory();
 };
 
 // --- Batching Updates Logic ---
@@ -186,6 +326,75 @@ const flushLogs = () => {
   });
 };
 
+const handleDeviceChange = () => {
+  clearLogs();
+  fetchHistory();
+};
+
+const getLogLevel = (log) => {
+  if (log.level) return log.level;
+  if (!log.query && !log.path) return null;
+  let qStr = '';
+  if (log.query && log.query !== '-') {
+    qStr = log.query;
+  } else if (log.path && log.path.includes('?')) {
+    qStr = log.path.split('?')[1];
+  }
+  
+  if (!qStr) return null;
+  const parts = qStr.split('&');
+  for (const p of parts) {
+    if (p.startsWith('level=')) return p.substring(6);
+  }
+  return null;
+};
+
+const getLogDetails = (log) => {
+  if (log.tag || log.level) return { tag: log.tag, text: log.query || log.path };
+  if (!log.path || !log.path.startsWith('/log/')) return null;
+  const qStr = log.query || (log.path.includes('?') ? log.path.split('?')[1] : '');
+  if (!qStr) return null;
+  const params = new URLSearchParams(qStr);
+  return {
+    tag: params.get('tag'),
+    text: params.get('text')
+  };
+};
+
+const getLogStyle = (log) => {
+  const level = getLogLevel(log);
+  if (level && levelColors.value[level]) {
+    return { color: levelColors.value[level], fontWeight: level === 'e' ? '600' : 'normal' };
+  }
+  return {};
+};
+
+const highlightText = (text) => {
+  if (!searchText.value || !text) return text;
+  const q = searchText.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const reg = new RegExp(`(${q})`, 'gi');
+  return String(text).replace(reg, '<mark class="hl">$1</mark>');
+};
+
+const getLevelColor = (lvl) => {
+  if (lvl === 'e' || lvl === 'error') return 'red';
+  if (lvl === 'd' || lvl === 'debug') return 'blue';
+  return 'default';
+};
+
+const showDetail = (log) => {
+  selectedLog.value = log;
+  detailVisible.value = true;
+};
+
+const copyLog = (log) => {
+  const text = JSON.stringify(log, null, 2);
+  navigator.clipboard.writeText(text).then(() => {
+    // Simple toast would be better but we don't have it imported easily
+    // We'll just use a small effect or skip for now to avoid errors
+  });
+};
+
 const addLog = (entry) => {
   entry.timeOnly = parseTime(entry.time);
   const frozen = Object.freeze(entry);
@@ -202,12 +411,26 @@ const addLog = (entry) => {
 };
 
 const filteredLogs = computed(() => {
-  const all = logs.value;
+  let all = logs.value;
+  
+  // Filtering is handled by backend for history, but we also filter here for real-time logs
+  if (selectedDevice.value) {
+    all = all.filter(l => l.device_id === selectedDevice.value);
+  }
+  if (selectedLevel.value) {
+    all = all.filter(l => l.level === selectedLevel.value);
+  }
+  if (selectedTag.value) {
+    all = all.filter(l => l.tag === selectedTag.value);
+  }
+
   if (!searchText.value) return all;
   const q = searchText.value.toLowerCase();
   return all.filter(l =>
     (l.path && l.path.toLowerCase().includes(q)) ||
     (l.ip && l.ip.includes(q)) ||
+    (l.device_id && l.device_id.toLowerCase().includes(q)) ||
+    (l.tag && l.tag.toLowerCase().includes(q)) ||
     (l.status && String(l.status).includes(q))
   );
 });
@@ -292,9 +515,23 @@ const fetchStats = async () => {
   try { stats.value = await (await fetch('/api/stats')).json(); } catch (e) { }
 }
 
+const fetchDevices = async () => {
+  try { devices.value = await (await fetch('/api/devices')).json(); } catch (e) { }
+}
+
+const fetchTags = async () => {
+  try { tags.value = await (await fetch('/api/tags')).json(); } catch (e) { }
+}
+
 const fetchHistory = async () => {
   try {
-    const response = await fetch('/api/history');
+    const params = new URLSearchParams();
+    if (selectedDevice.value) params.set('device', selectedDevice.value);
+    if (selectedLevel.value) params.set('level', selectedLevel.value);
+    if (selectedTag.value) params.set('tag', selectedTag.value);
+    
+    const url = `/api/history?${params.toString()}`;
+    const response = await fetch(url);
     const history = await response.json();
     if (history) {
       logs.value = history.reverse().map(l => ({
@@ -330,12 +567,49 @@ const clearLogs = () => {
   renderBuffer.value = [];
 };
 
+const exportCSV = () => {
+  const all = filteredLogs.value;
+  if (!all.length) return;
+
+  const headers = ['ID', 'Time', 'Level', 'Tag', 'DeviceID', 'Method', 'Path', 'Status', 'IP'];
+  const rows = all.map(l => [
+    l.id,
+    l.time,
+    l.level || 'info',
+    l.tag || '',
+    l.device_id || '',
+    l.method,
+    l.path,
+    l.status,
+    l.ip
+  ]);
+
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+  ].join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.setAttribute("href", url);
+  link.setAttribute("download", `logs_export_${new Date().getTime()}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
 import { onUnmounted } from 'vue';
 
 onMounted(() => {
   connect();
   fetchHistory();
+  fetchDevices();
+  fetchTags();
   setInterval(fetchStats, 5000);
+  setInterval(fetchDevices, 10000);
+  setInterval(fetchTags, 15000);
   updateContainerHeight();
   window.addEventListener('resize', updateContainerHeight);
 });
@@ -350,140 +624,190 @@ onUnmounted(() => {
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  /* Dark Mode (Default) */
-  --bg-color: #1e1e1e;
-  --sidebar-bg: #252526;
-  --header-bg: #252526;
-  --border-color: #333333;
-  --row-hover: #2a2d2e;
-  --text-primary: #cccccc;
-  --text-secondary: #858585;
-  --card-bg: rgba(255, 255, 255, 0.04);
-  --accent-color: #007acc;
-  --path-color: #d4d4d4;
+  /* Premium Dark Mode (Default) 🛰️ */
+  --bg-color: #0d0f14;
+  --sidebar-bg: rgba(22, 27, 34, 0.85);
+  --header-bg: rgba(13, 15, 20, 0.7);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --row-hover: rgba(255, 255, 255, 0.04);
+  --text-primary: #e6edf3;
+  --text-secondary: #7d8590;
+  --card-bg: rgba(255, 255, 255, 0.03);
+  --accent-color: #58a6ff;
+  --accent-gradient: linear-gradient(135deg, #58a6ff 0%, #1f6feb 100%);
+  --path-color: #d2a8ff;
   --header-text: #fff;
-  --tag-bg: rgba(255, 255, 255, 0.1);
-  --tag-color: #ccc;
-  --scrollbar-track: #1e1e1e;
-  --scrollbar-thumb: #424242;
-  --scrollbar-thumb-border: #1e1e1e;
+  --tag-bg: rgba(110, 118, 129, 0.4);
+  --tag-color: #adbac7;
+  --scrollbar-track: #0d0f14;
+  --scrollbar-thumb: #30363d;
+  --scrollbar-thumb-border: #0d0f14;
+  --glass-blend: blur(12px) saturate(180%);
 }
 
 :root[data-theme='light'] {
-  --bg-color: #ffffff;
-  --sidebar-bg: #f8f9fa;
-  --header-bg: #f1f3f5;
-  --border-color: #e9ecef;
-  --row-hover: #f1f3f5;
-  --text-primary: #343a40;
-  --text-secondary: #868e96;
-  --card-bg: #fff;
-  --accent-color: #228be6;
-  --path-color: #212529;
-  --header-text: #495057;
-  --tag-bg: #e9ecef;
-  --tag-color: #495057;
-  --scrollbar-track: #fff;
-  --scrollbar-thumb: #ced4da;
-  --scrollbar-thumb-border: #fff;
+  --bg-color: #f6f8fa;
+  --sidebar-bg: rgba(255, 255, 255, 0.8);
+  --header-bg: rgba(246, 248, 250, 0.7);
+  --border-color: #d0d7de;
+  --row-hover: #f3f4f6;
+  --text-primary: #1f2328;
+  --text-secondary: #656d76;
+  --card-bg: #ffffff;
+  --accent-color: #0969da;
+  --accent-gradient: linear-gradient(135deg, #0969da 0%, #03449d 100%);
+  --path-color: #8250df;
+  --header-text: #24292f;
+  --tag-bg: #eff2f5;
+  --tag-color: #57606a;
+  --scrollbar-track: #f6f8fa;
+  --scrollbar-thumb: #d0d7de;
+  --scrollbar-thumb-border: #f6f8fa;
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   background-color: var(--bg-color);
   color: var(--text-primary);
   margin: 0;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 #app-container {
   display: flex;
   height: 100vh;
   width: 100vw;
+  background-image: radial-gradient(circle at 50% 50%, rgba(88, 166, 255, 0.05) 0%, transparent 50%);
 }
 
 .sidebar {
-  width: 280px;
+  width: 300px;
   background: var(--sidebar-bg);
+  backdrop-filter: var(--glass-blend);
+  -webkit-backdrop-filter: var(--glass-blend);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  padding: 16px;
-  gap: 16px;
-  transition: background 0.2s, border-color 0.2s;
+  padding: 24px 16px;
+  gap: 20px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
 }
 
 .brand {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.brand .ant-avatar {
+  box-shadow: 0 4px 12px rgba(88, 166, 255, 0.3);
+  background: var(--accent-gradient) !important;
+}
+
+/* AntD Overrides for Modernity */
+.ant-btn {
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s !important;
+}
+
+.ant-input, .ant-select-selector {
+  border-radius: 8px !important;
+  background: rgba(110, 118, 129, 0.05) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.ant-card {
+  border-radius: 12px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
 }
 
 .main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: var(--bg-color);
+  background: transparent;
   min-width: 0;
-  transition: background 0.2s;
+  position: relative;
 }
 
 .navbar {
-  height: 48px;
+  height: 64px;
   border-bottom: 1px solid var(--border-color);
   background: var(--header-bg);
+  backdrop-filter: var(--glass-blend);
+  -webkit-backdrop-filter: var(--glass-blend);
   display: flex;
   align-items: center;
-  padding: 0 16px;
+  padding: 0 24px;
   justify-content: space-between;
-  transition: background 0.2s, border-color 0.2s;
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
 .log-list {
   flex: 1;
   overflow-y: auto;
   position: relative;
+  scrollbar-gutter: stable;
 }
 
 .log-row {
   display: flex;
   align-items: center;
-  padding: 6px 12px;
+  padding: 0 24px;
   border-bottom: 1px solid var(--border-color);
-  font-size: 12px;
-  cursor: default;
-  gap: 12px;
-  transition: background 0.1s;
-  height: 36px;
+  font-size: 13px;
+  cursor: pointer;
+  gap: 16px;
+  transition: all 0.2s ease;
+  height: 48px;
+  position: absolute;
+  left: 0;
+  right: 0;
 }
 
 .log-row:hover {
   background-color: var(--row-hover);
+  transform: translateX(4px);
+  border-left: 2px solid var(--accent-color);
 }
 
 .header-row {
+  position: sticky;
+  top: 0;
   background: var(--header-bg);
   font-weight: 600;
-  color: var(--header-text);
+  color: var(--text-secondary);
   border-bottom: 2px solid var(--border-color);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  z-index: 2;
+  height: 40px;
+  transform: none !important;
 }
 
 .col-time {
-  width: 80px;
+  width: 90px;
   color: var(--text-secondary);
-  white-space: nowrap;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
 }
 
 .col-method {
-  width: 50px;
-  font-weight: 600;
-  flex-shrink: 0;
+  width: 60px;
+  font-weight: 700;
+  text-align: center;
+  font-size: 11px;
 }
 
 .col-path {
@@ -495,37 +819,53 @@ body {
   color: var(--path-color);
   display: flex;
   align-items: center;
+  gap: 10px;
+}
+
+.path-container {
+  display: flex;
+  align-items: center;
   gap: 8px;
-
-  .path-container {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .body-container {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
+  flex: 1;
+  overflow: hidden;
 }
 
 .col-status {
-  width: 50px;
+  width: 60px;
   flex-shrink: 0;
   text-align: center;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.status-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(110, 118, 129, 0.1);
 }
 
 .col-meta {
-  width: 140px;
+  width: 180px;
   display: flex;
-  gap: 4px;
+  gap: 8px;
   justify-content: flex-end;
   flex-shrink: 0;
+  align-items: center;
+}
+
+.row-actions {
+  display: none;
+  background: var(--bg-color);
+  border-radius: 6px;
+  padding: 2px 4px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.log-row:hover .row-actions {
+  display: flex;
+  position: absolute;
+  right: 180px;
 }
 
 .meta-tag {
@@ -536,68 +876,155 @@ body {
 .query-string {
   color: var(--accent-color);
   margin-left: 8px;
-  opacity: 0.8;
+  opacity: 0.7;
 }
 
 .status-badge {
   font-weight: 600;
 }
 
-.c-2xx {
-  color: #4ec9b0;
+.c-2xx { color: #3fb950; }
+.c-3xx { color: #58a6ff; }
+.c-4xx { color: #d29922; }
+.c-5xx { color: #f85149; }
+
+:root[data-theme='light'] .c-2xx { color: #1a7f37; }
+:root[data-theme='light'] .c-3xx { color: #0969da; }
+:root[data-theme='light'] .c-4xx { color: #9a6700; }
+:root[data-theme='light'] .c-5xx { color: #cf222e; }
+
+/* Detail Drawer Styles */
+.detail-content {
+  padding: 32px;
+  background: var(--bg-color);
+  color: var(--text-primary);
+  height: 100%;
+  overflow-y: auto;
 }
 
-.c-3xx {
-  color: #569cd6;
+.detail-section {
+  margin-bottom: 32px;
 }
 
-.c-4xx {
-  color: #ce9178;
+.detail-section h3 {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-color);
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
-.c-5xx {
-  color: #f44747;
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
 }
 
-:root[data-theme='light'] .c-2xx {
-  color: #059669;
+.grid-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-:root[data-theme='light'] .c-3xx {
-  color: #2563eb;
+.grid-item span {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
-:root[data-theme='light'] .c-4xx {
-  color: #d97706;
+.grid-item strong {
+  font-size: 14px;
+  word-break: break-all;
 }
 
-:root[data-theme='light'] .c-5xx {
-  color: #dc2626;
+.grid-item.full {
+  grid-column: span 2;
+}
+
+.code-block {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  background: var(--tag-bg);
+  padding: 12px;
+  border-radius: 8px;
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border: 1px solid var(--border-color);
+}
+
+.ua-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  background: var(--tag-bg);
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.raw-pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  background: #0d1117;
+  color: #39d353;
+  padding: 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  border: 1px solid var(--border-color);
 }
 
 .popover-json {
-  max-width: 400px;
-  max-height: 300px;
+  max-width: 500px;
+  max-height: 400px;
   overflow: auto;
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
   white-space: pre-wrap;
   word-break: break-all;
+  padding: 12px;
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 5px;
+  border-radius: 10px;
   border: 2px solid var(--scrollbar-thumb-border);
 }
 
 ::-webkit-scrollbar-corner {
   background: var(--scrollbar-track);
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #3fb950;
+  border-radius: 50%;
+  box-shadow: 0 0 0 rgba(63, 185, 80, 0.4);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(63, 185, 80, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); }
+}
+
+mark.hl {
+  background: rgba(255, 235, 59, 0.3);
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 2px;
+  box-shadow: 0 0 8px rgba(255, 235, 59, 0.2);
 }
 </style>
