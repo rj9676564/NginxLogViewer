@@ -196,7 +196,7 @@
     </main>
 
     <!-- Detail Drawer -->
-    <a-drawer v-model:open="detailVisible" title="Log Entry Details" placement="right" width="600" :closable="true"
+    <a-drawer v-model:visible="detailVisible" title="Log Entry Details" placement="right" width="600" :closable="true"
       :body-style="{ padding: '0' }">
       <div v-if="selectedLog" class="detail-content">
         <div class="detail-section">
