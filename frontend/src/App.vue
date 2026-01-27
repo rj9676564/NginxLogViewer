@@ -216,7 +216,7 @@
           <h3>Request Payload</h3>
           <div class="grid-item full" v-if="selectedLog.query && selectedLog.query !== '-'">
             <span>Query Parameters</span>
-            <code class="code-block">{{ selectedLog.query }}</code>
+            <pre class="code-block-pre"><code>{{ formatBody(selectedLog.query) }}</code></pre>
           </div>
           <div class="grid-item full" v-if="selectedLog.body && selectedLog.body !== '-'">
             <span>Body</span>
@@ -272,7 +272,27 @@ const logs = ref([ {
         "body": "{\"text\":\"error interceptor: DioException [unknown]: null\\nError: type '_Map\u003cString, dynamic\u003e' is not a subtype of type 'String'\",\"name\":\"\"}",
         "raw": "[d] : error interceptor: DioException [unknown]: null\nError: type '_Map\u003cString, dynamic\u003e' is not a subtype of type 'String'",
         "created_at": 1769489862
-    }]);
+    },    {
+        "id": 18437,
+        "ip": "172.19.0.1:54236",
+        "time": "2026-01-27T13:53:57.354746",
+        "method": "BATCH",
+        "path": "/api/log/batch",
+        "status": 200,
+        "bytes": 0,
+        "referer": "",
+        "ua": "Dart/3.5 (dart:io)",
+        "browser": "",
+        "os": "",
+        "device": "",
+        "device_id": "0e9955cd4c356d72ad23983035126ca708194f0970ce138f1bf32c54f241a91d",
+        "level": "d",
+        "tag": "Network",
+        "query": "{\"duration\":536,\"url\":\"https://mch-qa001.juhesaas.com/api/printer/add\",\"method\":\"POST\",\"statusCode\":200,\"response-data\":{\"message\":\"无效设备\",\"code\":1023,\"rid\":\"1465706391959310336\"},\"request-data\":{\"shopId\":\"6308562105\",\"deviceNo\":\"llllllllllll\",\"secretKey\":\"llllll\",\"deviceName\":\"\",\"verifyPhone\":\"\"}}",
+        "body": "{\"text\":\"{\\\"duration\\\":536,\\\"url\\\":\\\"https://mch-qa001.juhesaas.com/api/printer/add\\\",\\\"method\\\":\\\"POST\\\",\\\"statusCode\\\":200,\\\"response-data\\\":{\\\"message\\\":\\\"无效设备\\\",\\\"code\\\":1023,\\\"rid\\\":\\\"1465706391959310336\\\"},\\\"request-data\\\":{\\\"shopId\\\":\\\"6308562105\\\",\\\"deviceNo\\\":\\\"llllllllllll\\\",\\\"secretKey\\\":\\\"llllll\\\",\\\"deviceName\\\":\\\"\\\",\\\"verifyPhone\\\":\\\"\\\"}}\",\"name\":\"\"}",
+        "raw": "[d] Network: {\"duration\":536,\"url\":\"https://mch-qa001.juhesaas.com/api/printer/add\",\"method\":\"POST\",\"statusCode\":200,\"response-data\":{\"message\":\"无效设备\",\"code\":1023,\"rid\":\"1465706391959310336\"},\"request-data\":{\"shopId\":\"6308562105\",\"deviceNo\":\"llllllllllll\",\"secretKey\":\"llllll\",\"deviceName\":\"\",\"verifyPhone\":\"\"}}",
+        "created_at": 1769493256
+    },]);
 const backlog = ref([]); // Buffer for paused logs
 const renderBuffer = ref([]); // Buffer for batching updates
 const searchText = ref('');
@@ -671,7 +691,7 @@ import { onUnmounted } from 'vue';
 
 onMounted(() => {
   connect();
-  fetchHistory();
+  // fetchHistory();
   fetchDevices();
   fetchTags();
   setInterval(fetchStats, 5000);
