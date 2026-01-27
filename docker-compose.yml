@@ -4,7 +4,7 @@ services:
   log-viewer:
     build: .
     image: laibin2886/nginx-log-viewer:latest
-    container_name: nginx-log-viewer
+    container_name: logviwer
     ports:
       - "58080:58080"
     environment:

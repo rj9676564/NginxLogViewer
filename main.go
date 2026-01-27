@@ -59,7 +59,7 @@ var (
 	// logRegex will be initialized at runtime
 	logRegex *regexp.Regexp
 	// Fallback for standard combined if needed
-	simpleRegex = regexp.MustCompile(`^(?P<ip>\S+) - \S+ \[(?P<time>[^\]]+)\] "(?P<request>[^"]+)" (?P<status>\d+) (?P<bytes>\d+) "-" "(?P<ua>[^"]+)"`)
+	simpleRegex = regexp.MustCompile(`^(?P<ip>\S+) - \S+ \[(?P<time>[^\]]+)\] "(?P<request>[^"]+)" (?P<status>\d+) (?P<bytes>\d+) "(?P<referer>[^"]*)" "(?P<ua>[^"]*)"`)
 )
 
 // IncomingLog is what the client sends

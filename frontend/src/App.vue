@@ -110,9 +110,11 @@
       <!-- Header Row -->
       <div class="log-row header-row">
         <div class="col-time">Time</div>
+        <div class="col-level">Lvl</div>
+        <div class="col-tag">Tag</div>
         <div class="col-status">Status</div>
-        <div class="col-method">Method</div>
-        <div class="col-path">Path / Query</div>
+        <div class="col-method">Mthd</div>
+        <div class="col-path">Path / Content</div>
         <div class="col-meta">Client</div>
       </div>
 
@@ -126,6 +128,19 @@
               <!-- Time -->
               <div class="col-time" :title="log.time">{{ log.timeOnly }}</div>
 
+              <!-- Level -->
+              <div class="col-level">
+                <a-tag :color="getLevelColor(log.level)" style="font-size: 10px; min-width: 45px; text-align: center; margin: 0;">
+                  {{ (log.level || 'info').toUpperCase() }}
+                </a-tag>
+              </div>
+
+              <!-- Tag -->
+              <div class="col-tag">
+                <span v-if="log.tag" class="small-badge" @click.stop="selectedTag = log.tag; handleFilterChange()">{{ log.tag }}</span>
+                <span v-else>-</span>
+              </div>
+
               <!-- Status -->
               <div class="col-status status-badge" :class="getStatusClass(log.status)">{{ log.status }}</div>
 
@@ -135,22 +150,9 @@
               <!-- Path + Query + Body Icon -->
               <div class="col-path" :style="getLogStyle(log)">
                 <div class="path-container">
-                  <template v-if="log.device_id">
-                    <a-tag size="small" color="blue" style="margin-right: 4px; font-size: 10px; cursor: pointer" @click="selectedDevice = log.device_id; handleFilterChange()">{{ log.device_id }}</a-tag>
-                  </template>
                   <template v-if="log.path">
-                    <template v-if="log.tag">
-                      <span style="background: var(--tag-bg); padding: 0 4px; border-radius: 3px; margin-right: 4px; font-weight: 600; cursor: pointer" @click.stop="selectedTag = log.tag; handleFilterChange()">{{ log.tag }}</span>
-                      <span style="font-weight: 500;" v-html="highlightText(getLogDetails(log).text || formatPath(log.path))"></span>
-                    </template>
-                    <template v-else-if="getLogDetails(log)">
-                      <span v-if="getLogDetails(log).tag" style="background: var(--tag-bg); padding: 0 4px; border-radius: 3px; margin-right: 4px; font-weight: 600; cursor: pointer" @click.stop="selectedTag = getLogDetails(log).tag; handleFilterChange()">{{ getLogDetails(log).tag }}</span>
-                      <span style="font-weight: 500;" v-html="highlightText(getLogDetails(log).text || formatPath(log.path))"></span>
-                    </template>
-                    <template v-else>
-                      <span :title="log.path" v-html="highlightText(formatPath(log.path))"></span>
-                    </template>
-                    <span v-if="getDisplayQuery(log) && !getLogDetails(log) && !log.tag" class="query-string" :style="getLogStyle(log)">?{{ getDisplayQuery(log) }}</span>
+                    <span style="font-weight: 500;" v-html="highlightText((getLogDetails(log)?.text) || formatPath(log.path))"></span>
+                    <span v-if="getDisplayQuery(log) && !getLogDetails(log)" class="query-string" :style="getLogStyle(log)">?{{ getDisplayQuery(log) }}</span>
                   </template>
                   <template v-else>
                     <span style="color: var(--text-secondary); opacity: 0.7; font-style: italic;">{{ log.raw }}</span>
@@ -277,10 +279,11 @@ watch(levelColors, (val) => {
 }, { deep: true });
 
 // --- Virtual Scroll Logic ---
-const itemHeight = 36;
+const itemHeight = 48; // Updated to match .log-row height
 const scrollTop = ref(0);
 const containerHeight = ref(800);
 const maxLogs = 2000;
+const isAtTop = ref(true);
 
 const visibleCount = computed(() => Math.ceil(containerHeight.value / itemHeight) + 5);
 const startIndex = computed(() => Math.floor(scrollTop.value / itemHeight));
@@ -295,6 +298,7 @@ const offsetY = computed(() => startIndex.value * itemHeight);
 
 const handleScroll = (e) => {
   scrollTop.value = e.target.scrollTop;
+  isAtTop.value = e.target.scrollTop < 10;
 };
 
 const updateContainerHeight = () => {
@@ -312,25 +316,32 @@ let flushTimer = null;
 const flushLogs = () => {
   if (renderBuffer.value.length === 0) return;
 
-  const newLogs = [...logs.value, ...renderBuffer.value];
+  const addedLogs = [...renderBuffer.value].reverse();
+  const addedCount = addedLogs.length;
+  const newLogs = [...addedLogs, ...logs.value];
   renderBuffer.value = [];
 
   // Keep limit
   if (newLogs.length > maxLogs) {
-    logs.value = newLogs.slice(newLogs.length - maxLogs);
+    logs.value = newLogs.slice(0, maxLogs);
   } else {
     logs.value = newLogs;
   }
 
-  // Auto scroll
-  nextTick(() => {
-    if (listRef.value) {
-      const el = listRef.value;
-      if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
-        el.scrollTop = el.scrollHeight;
+  // Auto scroll logic
+  if (isAtTop.value) {
+    nextTick(() => {
+      if (listRef.value) listRef.value.scrollTop = 0;
+    });
+  } else {
+    // Adjust scroll to prevent jumping when logs are added at the top
+    const adjustment = addedCount * itemHeight;
+    nextTick(() => {
+      if (listRef.value) {
+        listRef.value.scrollTop += adjustment;
       }
-    }
-  });
+    });
+  }
 };
 
 const handleDeviceChange = () => {
@@ -407,7 +418,7 @@ const addLog = (entry) => {
   const frozen = Object.freeze(entry);
 
   if (isPaused.value) {
-    backlog.value.push(frozen);
+    backlog.value.unshift(frozen);
     return;
   }
 
@@ -496,6 +507,12 @@ const getDisplayQuery = (log) => {
 
 const parseTime = (raw) => {
   if (!raw) return '--:--:--';
+  // Handle ISO format: 2026-01-27T11:10:07.403091
+  if (raw.includes('T')) {
+    const timePart = raw.split('T')[1];
+    return timePart.split('.')[0];
+  }
+  // Handle Nginx format: [27/Jan/2026:11:10:07 +0800]
   const parts = raw.split(':');
   if (parts.length >= 4) {
     return parts.slice(1, 4).join(':').split(' ')[0];
@@ -541,7 +558,7 @@ const fetchHistory = async () => {
     const response = await fetch(url);
     const history = await response.json();
     if (history) {
-      logs.value = history.reverse().map(l => ({
+      logs.value = history.map(l => ({
         ...l,
         timeOnly: parseTime(l.time),
         id: l.id || Math.random()
@@ -549,7 +566,7 @@ const fetchHistory = async () => {
 
       nextTick(() => {
         updateContainerHeight();
-        if (listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight;
+        if (listRef.value) listRef.value.scrollTop = 0;
       });
     }
   } catch (e) { }
@@ -559,11 +576,11 @@ const togglePause = () => {
   isPaused.value = !isPaused.value;
   if (!isPaused.value) {
     if (backlog.value.length > 0) {
-      logs.value = [...logs.value, ...backlog.value].slice(-maxLogs);
+      logs.value = [...backlog.value, ...logs.value].slice(0, maxLogs);
       backlog.value = [];
     }
     nextTick(() => {
-      if (listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight;
+      if (listRef.value && isAtTop.value) listRef.value.scrollTop = 0;
     });
   }
 };
@@ -859,17 +876,49 @@ body {
 }
 
 .col-time {
-  width: 90px;
+  min-width: 85px;
   color: var(--text-secondary);
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
+  flex-shrink: 0;
+}
+
+.col-level {
+  width: 65px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.col-tag {
+  width: 100px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.small-badge {
+  background: var(--tag-bg);
+  color: var(--text-primary);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+}
+
+.small-badge:hover {
+  border-color: var(--accent-color);
 }
 
 .col-method {
-  width: 60px;
+  width: 55px;
   font-weight: 700;
   text-align: center;
   font-size: 11px;
+  flex-shrink: 0;
 }
 
 .col-path {
