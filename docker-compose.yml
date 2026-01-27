@@ -13,9 +13,8 @@ services:
       - 'LISTEN_ADDR=:58080'
     volumes:
       # Mount your host log file to the container
-      # CHANGE ./access.log to your real log file path on host
       - ./access.log:/var/log/nginx/access.log:ro
-      - ./logs.db:/app/logs.db
-      # - ./config.json:/app/config.json # 如果你想用配置文件
-    command: ["./nginx-log-viewer", "-file", "/var/log/nginx/access.log", "-addr", ":58080"]
+      # Use a data directory for persistence to avoid file-mapping permission issues
+      - ./data:/app/data
+    command: ["./nginx-log-viewer", "-file", "/var/log/nginx/access.log", "-addr", ":58080", "-db", "/app/data/logs.db"]
     restart: unless-stopped
