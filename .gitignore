@@ -16,7 +16,10 @@ access.log
 go.work
 
 # DB
-logs.db
+logs.db*
+data/
+backend/server*
+server*
 
 # Frontend
 frontend/node_modules

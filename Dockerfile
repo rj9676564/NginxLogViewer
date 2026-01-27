@@ -29,12 +29,12 @@ FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend-builder
 WORKDIR /src
 
 # Copy go mod files first for better caching
-COPY go.mod go.sum ./
+COPY backend/go.mod backend/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
 # Copy source code
-COPY *.go ./
+COPY backend/*.go ./
 
 # Build arguments provided by Docker Buildx
 ARG TARGETOS
