@@ -159,16 +159,11 @@
                   </template>
                 </div>
 
-                <!-- Antd Popover for Body (Hover) -->
-                <div class="body-container">
-                  <a-popover placement="bottom" title="Request Body" trigger="hover"
-                    v-if="log.body && log.body !== '-'">
-                    <template #content>
-                      <div class="popover-json" :style="{ color: isDarkMode ? '#e2e8f0' : '#333' }">{{ log.body }}</div>
-                    </template>
-                    <a-tag color="orange" style="margin-left: 8px; cursor: pointer; border-radius: 2px;"
-                      title="Click to Inspect Body">BODY</a-tag>
-                  </a-popover>
+                <!-- Body Indicator (Click row to see details in drawer) -->
+                <div class="body-container" v-if="log.body && log.body !== '-'">
+                  <a-tag color="orange" style="margin-left: 8px; border-radius: 2px; font-size: 10px;">
+                    BODY
+                  </a-tag>
                 </div>
               </div>
 
@@ -257,7 +252,27 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
 
-const logs = ref([]);
+const logs = ref([ {
+        "id": 8883,
+        "ip": "172.19.0.1:43120",
+        "time": "2026-01-27T12:57:21.826986",
+        "method": "BATCH",
+        "path": "/api/log/batch",
+        "status": 200,
+        "bytes": 0,
+        "referer": "",
+        "ua": "Dart/3.5 (dart:io)",
+        "browser": "",
+        "os": "",
+        "device": "",
+        "device_id": "d29d0fb68f51cbe3937834d169576ad95527e8c3ab578c87f000d45f9e8770ef",
+        "level": "d",
+        "tag": "",
+        "query": "error interceptor: DioException [unknown]: null\nError: type '_Map\u003cString, dynamic\u003e' is not a subtype of type 'String'",
+        "body": "{\"text\":\"error interceptor: DioException [unknown]: null\\nError: type '_Map\u003cString, dynamic\u003e' is not a subtype of type 'String'\",\"name\":\"\"}",
+        "raw": "[d] : error interceptor: DioException [unknown]: null\nError: type '_Map\u003cString, dynamic\u003e' is not a subtype of type 'String'",
+        "created_at": 1769489862
+    }]);
 const backlog = ref([]); // Buffer for paused logs
 const renderBuffer = ref([]); // Buffer for batching updates
 const searchText = ref('');
@@ -652,7 +667,7 @@ import { onUnmounted } from 'vue';
 
 onMounted(() => {
   connect();
-  fetchHistory();
+  // fetchHistory();
   fetchDevices();
   fetchTags();
   setInterval(fetchStats, 5000);
