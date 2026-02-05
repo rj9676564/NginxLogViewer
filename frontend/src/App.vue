@@ -498,7 +498,9 @@ const filteredLogs = computed(() => {
     (l.ip && l.ip.includes(q)) ||
     (l.device_id && l.device_id.toLowerCase().includes(q)) ||
     (l.tag && l.tag.toLowerCase().includes(q)) ||
-    (l.status && String(l.status).includes(q))
+    (l.status && String(l.status).includes(q)) ||
+    (l.body && l.body.toLowerCase().includes(q)) ||
+    (l.raw && l.raw.toLowerCase().includes(q))
   );
 });
 

@@ -111,3 +111,11 @@ void sendLogs(List<Map> logs) async {
 curl -X POST "http://localhost:58080/api/log/push/script-01?level=d&tag=CRON" \
      -d "Backup task started"
 ```
+
+### JavaScript / TypeScript
+See [demo/sonic_logger.ts](./demo/sonic_logger.ts) for a full implementation.
+```typescript
+const logger = new SonicLogger('http://localhost:58080', 'web-001');
+await logger.push('App Started', { level: 'i', tag: 'INIT' });
+```
+
