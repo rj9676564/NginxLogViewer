@@ -258,47 +258,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
 
-const logs = ref([ {
-        "id": 8883,
-        "ip": "172.19.0.1:43120",
-        "time": "2026-01-27T12:57:21.826986",
-        "method": "BATCH",
-        "path": "/api/log/batch",
-        "status": 200,
-        "bytes": 0,
-        "referer": "",
-        "ua": "Dart/3.5 (dart:io)",
-        "browser": "",
-        "os": "",
-        "device": "",
-        "device_id": "d29d0fb68f51cbe3937834d169576ad95527e8c3ab578c87f000d45f9e8770ef",
-        "level": "d",
-        "tag": "",
-        "query": "error interceptor: DioException [unknown]: null\nError: type '_Map\u003cString, dynamic\u003e' is not a subtype of type 'String'",
-        "body": "{\"text\":\"error interceptor: DioException [unknown]: null\\nError: type '_Map\u003cString, dynamic\u003e' is not a subtype of type 'String'\",\"name\":\"\"}",
-        "raw": "[d] : error interceptor: DioException [unknown]: null\nError: type '_Map\u003cString, dynamic\u003e' is not a subtype of type 'String'",
-        "created_at": 1769489862
-    },    {
-        "id": 18437,
-        "ip": "172.19.0.1:54236",
-        "time": "2026-01-27T13:53:57.354746",
-        "method": "BATCH",
-        "path": "/api/log/batch",
-        "status": 200,
-        "bytes": 0,
-        "referer": "",
-        "ua": "Dart/3.5 (dart:io)",
-        "browser": "",
-        "os": "",
-        "device": "",
-        "device_id": "0e9955cd4c356d72ad23983035126ca708194f0970ce138f1bf32c54f241a91d",
-        "level": "d",
-        "tag": "Network",
-        "query": "{\"duration\":536,\"url\":\"https://mch-qa001.juhesaas.com/api/printer/add\",\"method\":\"POST\",\"statusCode\":200,\"response-data\":{\"message\":\"无效设备\",\"code\":1023,\"rid\":\"1465706391959310336\"},\"request-data\":{\"shopId\":\"6308562105\",\"deviceNo\":\"llllllllllll\",\"secretKey\":\"llllll\",\"deviceName\":\"\",\"verifyPhone\":\"\"}}",
-        "body": "{\"text\":\"{\\\"duration\\\":536,\\\"url\\\":\\\"https://mch-qa001.juhesaas.com/api/printer/add\\\",\\\"method\\\":\\\"POST\\\",\\\"statusCode\\\":200,\\\"response-data\\\":{\\\"message\\\":\\\"无效设备\\\",\\\"code\\\":1023,\\\"rid\\\":\\\"1465706391959310336\\\"},\\\"request-data\\\":{\\\"shopId\\\":\\\"6308562105\\\",\\\"deviceNo\\\":\\\"llllllllllll\\\",\\\"secretKey\\\":\\\"llllll\\\",\\\"deviceName\\\":\\\"\\\",\\\"verifyPhone\\\":\\\"\\\"}}\",\"name\":\"\"}",
-        "raw": "[d] Network: {\"duration\":536,\"url\":\"https://mch-qa001.juhesaas.com/api/printer/add\",\"method\":\"POST\",\"statusCode\":200,\"response-data\":{\"message\":\"无效设备\",\"code\":1023,\"rid\":\"1465706391959310336\"},\"request-data\":{\"shopId\":\"6308562105\",\"deviceNo\":\"llllllllllll\",\"secretKey\":\"llllll\",\"deviceName\":\"\",\"verifyPhone\":\"\"}}",
-        "created_at": 1769493256
-    },]);
+const logs = ref([]);
 const backlog = ref([]); // Buffer for paused logs
 const renderBuffer = ref([]); // Buffer for batching updates
 const searchText = ref('');
@@ -365,32 +325,27 @@ let flushTimer = null;
 const flushLogs = () => {
   if (renderBuffer.value.length === 0) return;
 
-  const addedLogs = [...renderBuffer.value].reverse();
-  const addedCount = addedLogs.length;
-  const newLogs = [...addedLogs, ...logs.value];
+  const addedLogs = [...renderBuffer.value];
+  const newLogs = [...logs.value, ...addedLogs]; // Append new logs to the end
   renderBuffer.value = [];
 
-  // Keep limit
+  // Keep limit, slicing from the end to keep the newest logs
   if (newLogs.length > maxLogs) {
-    logs.value = newLogs.slice(0, maxLogs);
+    logs.value = newLogs.slice(newLogs.length - maxLogs);
   } else {
     logs.value = newLogs;
   }
 
-  // Auto scroll logic
-  if (isAtTop.value) {
-    nextTick(() => {
-      if (listRef.value) listRef.value.scrollTop = 0;
-    });
-  } else {
-    // Adjust scroll to prevent jumping when logs are added at the top
-    const adjustment = addedCount * itemHeight;
-    nextTick(() => {
-      if (listRef.value) {
-        listRef.value.scrollTop += adjustment;
-      }
-    });
-  }
+  // Auto scroll logic (Terminal style: newest at bottom)
+  nextTick(() => {
+    if (listRef.value) {
+       const el = listRef.value;
+       const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+       if (isAtBottom) {
+         el.scrollTop = el.scrollHeight;
+       }
+    }
+  });
 };
 
 const handleDeviceChange = () => {
@@ -467,7 +422,7 @@ const addLog = (entry) => {
   const frozen = Object.freeze(entry);
 
   if (isPaused.value) {
-    backlog.value.unshift(frozen);
+    backlog.value.unshift(frozen); // backlog is newest-first
     return;
   }
 
@@ -573,7 +528,7 @@ const getDisplayQuery = (log) => {
 };
 
 const parseTime = (raw) => {
-  if (!raw) return '--:--:--';
+  if (!raw) return '--:----';
   // Handle ISO format: 2026-01-27T11:10:07.403091
   if (raw.includes('T')) {
     const timePart = raw.split('T')[1];

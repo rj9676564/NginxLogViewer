@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -275,6 +276,8 @@ func initDB() {
 	if _, err := db.Exec(createTableSQL); err != nil {
 		log.Fatalf("Failed to create table: %v", err)
 	}
+	
+	log.Printf("Database initialized successfully at %s", *dbPath)
 	
 	// Index for faster queries
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_created_at ON logs(created_at);`)
@@ -869,13 +872,20 @@ func main() {
 	})
 
 	// Apply final values
+	absLogFile, _ := filepath.Abs(finalLogFile)
+	absDBPath, _ := filepath.Abs(finalDBPath)
+	
 	*addr = finalAddr
-	*logFile = finalLogFile
-	*dbPath = finalDBPath
+	*logFile = absLogFile
+	*dbPath = absDBPath
 	*staticDir = finalStaticDir
 	*formatStr = finalFormat
 
+	log.Printf("Starting Nginx Log Viewer (Version: %s, Commit: %s)", Version, GitCommit)
+	log.Printf("Using log file: %s", *logFile)
+	log.Printf("Using database: %s", *dbPath)
 	log.Printf("Using log format: %s", *formatStr)
+	
 	logRegex = buildRegexFromNginx(*formatStr)
 
 	initDB()
