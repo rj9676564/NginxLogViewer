@@ -584,7 +584,8 @@ const fetchHistory = async () => {
     const response = await fetch(url);
     const history = await response.json();
     if (history) {
-      logs.value = history.map(l => ({
+      // Reverse history to show newest at bottom (chronological order)
+      logs.value = history.reverse().map(l => ({
         ...l,
         timeOnly: parseTime(l.time),
         id: l.id || Math.random()
@@ -654,7 +655,7 @@ import { onUnmounted } from 'vue';
 
 onMounted(() => {
   connect();
-  // fetchHistory();
+  fetchHistory();
   fetchDevices();
   fetchTags();
   setInterval(fetchStats, 5000);
