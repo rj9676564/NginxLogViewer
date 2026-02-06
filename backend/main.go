@@ -22,6 +22,12 @@ import (
 )
 
 var (
+	Version   = "dev"
+	BuildTime = "unknown"
+	GitCommit = "none"
+)
+
+var (
 	addr       = flag.String("addr", ":58080", "http service address")
 	logFile    = flag.String("file", "/var/log/nginx/access.log", "path to nginx log file")
 	dbPath     = flag.String("db", "./logs.db", "path to sqlite database")
