@@ -1,29 +1,4 @@
-# Stage 1: Build Frontend (Only once on build host)
-FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-builder
-
-# Install pnpm
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-WORKDIR /app/frontend
-
-# Copy package.json and pnpm-lock.yaml (if exists) first
-COPY frontend/package.json ./
-COPY frontend/pnpm-lock.yaml* ./
-
-# Install dependencies using a cache mount for the pnpm store
-# This makes subsequent builds incredibly fast
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile || pnpm install
-
-# Copy source files
-COPY frontend ./
-
-# Build frontend
-RUN pnpm run build
-
-# Stage 2: Build Backend
+# Stage 1: Build Backend
 FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS backend-builder
 
 WORKDIR /src
@@ -64,7 +39,7 @@ RUN apk add --no-cache ca-certificates tzdata && \
 
 # Copy binaries and assets
 COPY --from=backend-builder /out/nginx-log-viewer /app/nginx-log-viewer
-COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
+COPY frontend/dist /app/frontend/dist
 
 # Set ownership
 RUN chown -R appuser:appuser /app

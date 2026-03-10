@@ -29,9 +29,8 @@ logs.db-*
 *_test.go
 test_*.go
 
-# Frontend build artifacts (will be built in Docker)
+# Frontend build artifacts
 frontend/node_modules
-frontend/dist
 frontend/.vite
 frontend/.cache
 
