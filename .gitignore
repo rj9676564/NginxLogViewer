@@ -25,3 +25,4 @@ server*
 frontend/node_modules
 .env.local
 .env.*.local
+frontend/dist

@@ -325,24 +325,23 @@ let flushTimer = null;
 const flushLogs = () => {
   if (renderBuffer.value.length === 0) return;
 
-  const addedLogs = [...renderBuffer.value];
-  const newLogs = [...logs.value, ...addedLogs]; // Append new logs to the end
+  const addedLogs = [...renderBuffer.value].reverse();
+  const newLogs = [...addedLogs, ...logs.value]; // Prepend new logs to the front
   renderBuffer.value = [];
 
-  // Keep limit, slicing from the end to keep the newest logs
+  // Keep limit, slicing from the start to keep the newest logs
   if (newLogs.length > maxLogs) {
-    logs.value = newLogs.slice(newLogs.length - maxLogs);
+    logs.value = newLogs.slice(0, maxLogs);
   } else {
     logs.value = newLogs;
   }
 
-  // Auto scroll logic (Terminal style: newest at bottom)
+  // Auto scroll logic (Terminal style: newest at top)
   nextTick(() => {
     if (listRef.value) {
        const el = listRef.value;
-       const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
-       if (isAtBottom) {
-         el.scrollTop = el.scrollHeight;
+       if (isAtTop.value) {
+         el.scrollTop = 0;
        }
     }
   });
@@ -584,8 +583,8 @@ const fetchHistory = async () => {
     const response = await fetch(url);
     const history = await response.json();
     if (history) {
-      // Reverse history to show newest at bottom (chronological order)
-      logs.value = history.reverse().map(l => ({
+      // Show newest at top
+      logs.value = history.map(l => ({
         ...l,
         timeOnly: parseTime(l.time),
         id: l.id || Math.random()
