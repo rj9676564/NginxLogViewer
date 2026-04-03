@@ -1,135 +1,159 @@
-# Sonic Stellar: Nginx Log Viewer 🚀
+# Log Viewer
 
-**Sonic Stellar** is a high-performance, real-time Nginx log visualization and analysis tool. Built with a Go 1.24 backend and a Vue 3 + Vite frontend, it provides an instantaneous, beautiful, and searchable view of your server traffic.
+一个基于 Go + Vue 3 的实时日志查看工具。
+
+当前版本的核心能力是：
+
+- 通过 HTTP API 接收日志
+- 通过 WebSocket 实时推送到前端
+- 通过 SQLite 保存历史记录
+- 支持按设备、级别、标签筛选日志
 
 ![Build Status](https://github.com/rj9676564/NginxLogViewer/actions/workflows/docker-publish.yml/badge.svg)
 ![Go Version](https://img.shields.io/badge/go-1.24-00ADD8.svg)
 ![Vue Version](https://img.shields.io/badge/vue-3.x-4FC08D.svg)
-![Docker Multi-Arch](https://img.shields.io/badge/docker-multi--arch-blue.svg)
 
-## ✨ Features
+## ✨ 功能概览
 
--   **⚡ Real-time Streaming**: Watch logs flow in with millisecond latency via WebSockets.
--   **🔍 Intelligent Parsing**: Robust regex-based parsing that supports standard `combined` formats and complex custom formats (including `$request_body`, `$query_string`, and JSON fields).
--   **🚀 Performance First**:
-    -   **Backend**: Compiled Go 1.24 binary with minimal memory footprint.
-    -   **Frontend**: Virtualized list rendering for handling thousands of log lines without lag.
-    -   **CI/CD**: Optimized multi-arch Docker builds (amd64/arm64) that complete in < 1.5 minutes.
--   **🎨 Premium UI/UX**:
-    -   **Modern Aesthetics**: Built with Ant Design Vue for a clean, professional look.
-    -   **Dark/Light Mode**: Seamless theme switching with persistence.
-    -   **Smart Context**: Auto-decodes URL-encoded query strings and formats JSON request bodies for humans.
--   **📈 Built-in Analytics**: Real-time PV/UV tracking and status code distribution.
--   **📚 [API Documentation](./API_DOCS.md)**: Dedicated endpoints for pushing logs from Android/iOS/Flutter clients.
--   **🐳 Cloud Native**: Production-ready Docker images with extremely small footprints using Alpine Linux.
+- **实时日志流**：新日志写入后立即广播到前端
+- **单条 / 批量写入**：支持 `push` 和 `batch` 两种接入方式
+- **历史记录查询**：日志持久化到 SQLite，页面刷新后仍可回看
+- **多维筛选**：支持按 `device_id`、`level`、`tag` 查询
+- **接入成本低**：脚本、前端、移动端都可以直接通过 HTTP 接入
+- **部署简单**：提供 Dockerfile 和 `docker-compose.yml`
 
-## 🛠️ Tech Stack
+## 🧱 项目结构
 
--   **Backend**: Go 1.24, Gorilla WebSockets, SQLite (for history).
--   **Frontend**: Vue 3 (Composition API), Vite, Ant Design Vue, pnpm.
--   **DevOps**: Docker (Multi-stage + Multi-arch), GitHub Actions (BuildKit Cache).
+```text
+.
+├── backend/            Go 后端
+├── frontend/           Vue 3 前端
+├── demo/               接入示例
+├── scripts/            辅助脚本
+├── Dockerfile
+├── docker-compose.yml
+├── config.json.example
+├── README.md
+└── API.md
+```
 
-## 🚀 Quick Start
+## 🚀 快速开始
 
-### 1. Run with Docker (Recommended)
+### 1. 使用 Docker 启动
 
 ```bash
 docker run -d \
-  --name nginx-viewer \
+  --name log-viewer \
   -p 58080:58080 \
-  -v /var/log/nginx/access.log:/logs/access.log:ro \
-  -e LOG_FILE=/logs/access.log \
-  -e LOG_FORMAT='$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" "$request_body"' \
-  docker.io/rj9676564/nginx-log-viewer:latest
+  -v ./data:/app/data \
+  laibin2886/log-viewer:latest \
+  -db /app/data/logs.db
 ```
 
-> **Tip**: Alternatively, you can mount a `config.json` file and use the `-config` flag:
-> `docker run -d -v ./config.json:/app/config.json:ro -p 58080:58080 rj9676564/nginx-log-viewer -config /app/config.json`
+启动后访问：
 
-### 2. Run with Docker Compose
-
-Edit your `docker-compose.yml`:
-
-```yaml
-services:
-  log-viewer:
-    image: rj9676564/nginx-log-viewer:latest
-    ports:
-      - "58080:58080"
-    volumes:
-      - /var/log/nginx/access.log:/var/log/nginx/access.log:ro
-    environment:
-      - LOG_FILE=/var/log/nginx/access.log
-      - LOG_FORMAT=$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" "$request_body"
-    restart: always
+```text
+http://localhost:58080
 ```
 
-## 🛠️ Development Setup
+### 2. 使用 Docker Compose 启动
 
-### Prerequisites
--   Go 1.24+
--   Node.js 20+
--   pnpm 9+
+仓库已提供 [docker-compose.yml](/Users/laibin/Documents/UGit/NginxLogViewer/docker-compose.yml)。
 
-### Local Environment
+直接启动：
 
-1.  **Start Backend**:
-    ```bash
-    go mod download
-    go run main.go -file /path/to/your/access.log
-    ```
+```bash
+docker compose up -d
+```
 
-2.  **Start Frontend**:
-    ```bash
-    cd frontend
-    pnpm install
-    pnpm dev
-    ```
-    Access the dev portal at `http://localhost:5173`.
+### 3. 本地开发启动
 
-## ⚙️ Configuration
+#### 后端
 
-| Flag / Env | Config Key | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `-config` | - | - | Path to a JSON configuration file |
-| `-addr` / `LISTEN_ADDR` | `addr` | `:58080` | Server address |
-| `-file` / `LOG_FILE` | `log_file` | `/var/log/nginx/access.log` | Path to log file |
-| `-format` / `LOG_FORMAT` | `log_format` | (Custom) | Nginx `log_format` string |
-| `-db` / `DB_PATH` | `db_path` | `./logs.db` | SQLite storage path |
+```bash
+cd backend
+go mod download
+go run . -db ./logs.db
+```
 
-### Configuration Methods
-Sonic Stellar supports multiple configuration methods with the following priority (highest to lowest):
-1.  **Command-line Flags**
-2.  **Environment Variables**
-3.  **JSON Configuration File** (via `-config`)
-4.  **Default Values**
+#### 前端
 
-#### Example `config.json`
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+前端开发地址默认是：
+
+```text
+http://localhost:5173
+```
+
+## ⚙️ 配置说明
+
+程序支持 4 种配置来源，优先级从高到低如下：
+
+1. 命令行参数
+2. 环境变量
+3. `-config` 指定的 JSON 配置文件
+4. 默认值
+
+### 可用配置项
+
+| 参数 | 环境变量 | 配置文件字段 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `-addr` | `LISTEN_ADDR` | `addr` | `:58080` | 服务监听地址 |
+| `-db` | `DB_PATH` | `db_path` | `./logs.db` | SQLite 数据库路径 |
+| `-static` | `STATIC_DIR` | `static_dir` | `./frontend/dist` | 前端静态文件目录 |
+| `-config` | 无 | 无 | 空 | JSON 配置文件路径 |
+
+### 配置文件示例
+
+可以参考 [config.json.example](/Users/laibin/Documents/UGit/NginxLogViewer/config.json.example)：
+
 ```json
 {
-    "addr": ":58080",
-    "log_file": "/var/log/nginx/access.log",
-    "log_format": "$remote_addr - $remote_user [$time_local] \"$request\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\" \"$request_body\"",
-    "db_path": "./logs.db"
+  "addr": ":58080",
+  "db_path": "./logs.db",
+  "static_dir": "./frontend/dist"
 }
 ```
 
-### Custom Log Format
-Sonic Stellar is designed to excel with custom formats. Example:
-```nginx
-log_format main '$remote_addr - $remote_user [$time_local] "$request" '
-                '$status $body_bytes_sent "$http_referer" '
-                '"$http_user_agent" "$request_body"';
+使用方式：
+
+```bash
+cd backend
+go run . -config ../config.json.example
 ```
 
-## 🏗️ Docker Build Optimization
-We take CI/CD performance seriously. Our current pipeline features:
--   **Native Cross-Compilation**: Go builds for `arm64` run at native `amd64` speeds using `$BUILDPLATFORM`.
--   **Frontend Tree Shaking**: Ant Design components are imported on-demand, reducing bundle size by 70%.
--   **Cache Mounts**: Persistently caches `pnpm` store and `go mod` across builds.
--   **Single-Phase Frontend**: Shared architectural assets are built only once for multi-platform images.
+## 📡 API 文档
 
-Detailed optimization records can be found in [DOCKER_OPTIMIZATION.md](./DOCKER_OPTIMIZATION.md).
+日志写入和读取接口见：
+
+- [API.md](/Users/laibin/Documents/UGit/NginxLogViewer/API.md)
+
+适用场景：
+
+- Flutter / Android / iOS 调试日志上报
+- 脚本或定时任务记录运行日志
+- 小型内部工具做统一日志面板
+
+## 🛠️ 开发说明
+
+### 技术栈
+
+- 后端：Go 1.24、WebSocket、SQLite
+- 前端：Vue 3、Vite、Ant Design Vue
+
+### 常见开发流程
+
+1. 启动后端服务
+2. 启动前端开发服务器
+3. 打开浏览器查看实时日志
+4. 使用 `demo/` 或脚本向接口推送日志
+5. 在页面中查看实时数据和历史记录
 
 ## 📄 License
-MIT License - Developed by [rj9676564](https://github.com/rj9676564).
+
+MIT

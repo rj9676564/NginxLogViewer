@@ -1,12 +1,12 @@
 /**
- * Sonic Stellar Logger - JavaScript Implementation
+ * Log Viewer Logger - JavaScript Implementation
  * 
  * A simple utility to send logs from JS/Node.js environments.
  */
 
-class SonicLogger {
+class LogViewerLogger {
   /**
-   * @param {string} baseUrl - The base URL of your Sonic Stellar server (e.g., http://localhost:58080)
+   * @param {string} baseUrl - The base URL of your Log Viewer server (e.g., http://localhost:58080)
    * @param {string} deviceId - A unique identifier for this client
    */
   constructor(baseUrl, deviceId) {
@@ -41,7 +41,7 @@ class SonicLogger {
 
       return response.ok;
     } catch (err) {
-      console.error('[SonicLogger] Push failed:', err);
+      console.error('[LogViewerLogger] Push failed:', err);
       return false;
     }
   }
@@ -68,12 +68,12 @@ class SonicLogger {
 
       return response.ok;
     } catch (err) {
-      console.error('[SonicLogger] Batch failed:', err);
+      console.error('[LogViewerLogger] Batch failed:', err);
       return false;
     }
   }
 }
 
 // Example usage:
-// const logger = new SonicLogger('http://localhost:58080', 'web-client-001');
+// const logger = new LogViewerLogger('http://localhost:58080', 'web-client-001');
 // logger.push('User clicked login', { level: 'd', tag: 'UI', body: { x: 10, y: 20 } });

@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 
-/// SonicLoggerHttp - 基于 http 库的日志上报工具
-class SonicLogger {
+/// LogViewerLoggerHttp - 基于 http 库的日志上报工具
+class LogViewerLogger {
   static const String serverUrl = "http://localhost:58080"; 
   static const int maxBatchSize = 100;
   static const Duration idleTimeout = Duration(seconds: 20);
@@ -69,8 +69,7 @@ class SonicLogger {
         body: gzippedBytes,
       ).timeout(const Duration(seconds: 10));
     } catch (e) {
-      print("[SonicLoggerHttp] Error: $e");
+      print("[LogViewerLoggerHttp] Error: $e");
     }
   }
 }
- suburbancy

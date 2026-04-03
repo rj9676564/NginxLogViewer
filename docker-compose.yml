@@ -3,18 +3,13 @@ version: '3.8'
 services:
   log-viewer:
     build: .
-    image: laibin2886/nginx-log-viewer:latest
-    container_name: logviwer
+    image: laibin2886/log-viewer:latest
+    container_name: log-viewer
     ports:
       - "58080:58080"
-    environment:
-      - 'LOG_FORMAT=$remote_addr - $remote_user [$time_local] "$request" $status GET_ARGS: "$query_string" POST_BODY: "$request_body"'
-      - LOG_FILE=/var/log/nginx/access.log
-      - 'LISTEN_ADDR=:58080'
     volumes:
-      # Mount your host log file to the container
-      - /www/wwwlogs/log_post.log:/var/log/nginx/access.log:ro
-      # Use a data directory for persistence to avoid file-mapping permission issues
       - ./data:/app/data
-    command: ["./nginx-log-viewer", "-file", "/var/log/nginx/access.log", "-addr", ":58080", "-db", "/app/data/logs.db"]
+    environment:
+      - 'LISTEN_ADDR=:58080'
+      - DB_PATH=/app/data/logs.db
     restart: unless-stopped

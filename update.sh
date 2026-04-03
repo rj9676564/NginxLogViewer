@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Sonic Stellar 容器一键更新脚本
+# Log Viewer 容器一键更新脚本
 
-echo "🚀 开始更新 Sonic Stellar..."
+echo "🚀 开始更新 Log Viewer..."
 
 # 1. 拉取最新的镜像
 echo "📥 正在从 Docker Hub 拉取最新镜像..."

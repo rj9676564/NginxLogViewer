@@ -3,7 +3,7 @@
     <aside class="sidebar">
       <div class="brand">
         <a-avatar :size="32" shape="square">SS</a-avatar>
-        <span>Sonic Stellar</span>
+        <span>Log Viewer</span>
       </div>
 
       <div class="filter-section">
@@ -106,7 +106,7 @@
           <a-button size="small" @click="exportCSV" title="Download filtered logs as CSV">
             <template #icon>📥</template> Export CSV
           </a-button>
-          <a href="https://github.com/rj9676564/NginxLogViewer/blob/main/API_DOCS.md" target="_blank" class="docs-link" title="API Integration Guide" style="width: auto; padding: 0 10px;">
+          <a href="/API.md" target="_blank" class="docs-link" title="API Integration Guide" style="width: auto; padding: 0 10px;">
             <span style="font-size: 16px;">📖</span>
             <span style="font-size: 12px; font-weight: 600; margin-left: 6px; color: var(--text-primary);">DOCS</span>
           </a>
@@ -266,7 +266,7 @@ const isPaused = ref(false);
 const isConnected = ref(false);
 const stats = ref({ pv: 0, uv: 0 });
 const listRef = ref(null);
-const logFile = ref('access.log');
+const logFile = ref('realtime log stream');
 const isDarkMode = ref(localStorage.getItem('theme') !== 'light');
 
 const detailVisible = ref(false);
@@ -537,7 +537,7 @@ const parseTime = (raw) => {
     }
     return hms.split(' ')[0];
   }
-  // Handle Nginx format: [27/Jan/2026:11:10:07 +0800]
+  // Handle server log format: [27/Jan/2026:11:10:07 +0800]
   const parts = raw.split(':');
   if (parts.length >= 4) {
     return parts.slice(1, 4).join(':').split(' ')[0];

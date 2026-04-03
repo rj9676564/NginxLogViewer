@@ -1,5 +1,5 @@
 /**
- * Sonic Stellar Logger - TypeScript Implementation
+ * Log Viewer Logger - TypeScript Implementation
  * 
  * Provides type-safe logging for TS projects (React, Vue, Node.js).
  */
@@ -14,7 +14,7 @@ export interface LogEntry {
   time?: string;
 }
 
-export class SonicLogger {
+export class LogViewerLogger {
   private baseUrl: string;
   private deviceId: string;
 
@@ -50,7 +50,7 @@ export class SonicLogger {
 
       return response.ok;
     } catch (err) {
-      console.error('[SonicLogger] Push failed:', err);
+      console.error('[LogViewerLogger] Push failed:', err);
       return false;
     }
   }
@@ -76,12 +76,12 @@ export class SonicLogger {
 
       return response.ok;
     } catch (err) {
-      console.error('[SonicLogger] Batch failed:', err);
+      console.error('[LogViewerLogger] Batch failed:', err);
       return false;
     }
   }
 }
 
 // Example usage:
-// const logger = new SonicLogger('http://localhost:58080', 'ts-worker-01');
+// const logger = new LogViewerLogger('http://localhost:58080', 'ts-worker-01');
 // logger.push('Initializing system...', { level: 'i' });

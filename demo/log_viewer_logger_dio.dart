@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 
-/// SonicLoggerDio - 基于 Dio 库的日志上报工具
-class SonicLogger {
+/// LogViewerLoggerDio - 基于 Dio 库的日志上报工具
+class LogViewerLogger {
   static const String serverUrl = "http://localhost:58080"; 
   static const int maxBatchSize = 100;
   static const Duration idleTimeout = Duration(seconds: 20);
@@ -77,7 +77,7 @@ class SonicLogger {
         ),
       );
     } catch (e) {
-      print("[SonicLoggerDio] Error: $e");
+      print("[LogViewerLoggerDio] Error: $e");
       // 优化建议：在此处将 logsToSend 存入本地数据库 (如 sqflite)，待网络恢复后重试
     }
   }

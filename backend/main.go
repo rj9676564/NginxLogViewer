@@ -11,13 +11,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/hpcloud/tail"
 	"github.com/mssola/user_agent"
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
 )
@@ -30,18 +28,14 @@ var (
 
 var (
 	addr       = flag.String("addr", ":58080", "http service address")
-	logFile    = flag.String("file", "/var/log/nginx/access.log", "path to nginx log file")
 	dbPath     = flag.String("db", "./logs.db", "path to sqlite database")
-	formatStr  = flag.String("format", "", "Nginx log format string")
 	staticDir  = flag.String("static", "./frontend/dist", "path to frontend static files")
 	configPath = flag.String("config", "", "path to config.json file")
 )
 
 type Config struct {
 	Addr      string `json:"addr"`
-	LogFile   string `json:"log_file"`
 	DBPath    string `json:"db_path"`
-	LogFormat string `json:"log_format"`
 	StaticDir string `json:"static_dir"`
 }
 
@@ -64,13 +58,6 @@ func getEnv(key, fallback string) string {
 	}
 	return fallback
 }
-
-var (
-	// logRegex will be initialized at runtime
-	logRegex *regexp.Regexp
-	// Fallback for standard combined if needed
-	simpleRegex = regexp.MustCompile(`^(?P<ip>\S+) - \S+ \[(?P<time>[^\]]+)\] "(?P<request>[^"]+)" (?P<status>\d+) (?P<bytes>\d+) "(?P<referer>[^"]*)" "(?P<ua>[^"]*)"`)
-)
 
 // IncomingLog is what the client sends
 type IncomingLog struct {
@@ -644,209 +631,20 @@ func handlePushLog(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
-// buildRegexFromNginx converts an Nginx log_format string into a regular expression
-func buildRegexFromNginx(format string) *regexp.Regexp {
-	// Normalize format: remove newlines and collapse multiple spaces
-	format = strings.ReplaceAll(format, "\n", " ")
-	format = strings.ReplaceAll(format, "\r", " ")
-	reSpace := regexp.MustCompile(`\s+`)
-	format = reSpace.ReplaceAllString(format, " ")
-	format = strings.TrimSpace(format)
-
-	// Reference mapping: nginx variable -> regex named group
-	// IMPORTANT: Order matters! Longer variable names must be replaced first
-	// to prevent $request from being replaced inside $request_body
-	replacements := []struct{
-		key string
-		val string
-	}{
-		{"$body_bytes_sent", `(?P<bytes>\d*)`},
-		{"$http_user_agent", `(?P<ua>[^"]*)`},
-		{"$http_referer", `(?P<referer>[^"]*)`},
-		{"$request_body", `(?P<body>.*)`},
-		{"$query_string", `(?P<query>[^"]*)`},
-		{"$remote_addr", `(?P<ip>\S+)`},
-		{"$remote_user", `(?P<user>\S*)`},
-		{"$time_local", `(?P<time>[^\]]+)`},
-		{"$request", `(?P<method>\S+)\s+(?P<path>\S+)\s+(?P<proto>[^"]*)`},
-		{"$status", `(?P<status>\d+)`},
-	}
-
-	// 1. Escape regex special characters from the format string
-	res := regexp.QuoteMeta(format)
-
-	// 2. Handle nginx variables (convert back from quoted \$ to group)
-	// Process in order to avoid substring replacement issues
-	for _, r := range replacements {
-		escapedVar := regexp.QuoteMeta(r.key)
-		res = strings.ReplaceAll(res, escapedVar, r.val)
-	}
-
-	// 3. Handle flexible whitespace: any space in format can match one or more spaces
-	res = strings.ReplaceAll(res, `\ `, `\s+`)
-	res = strings.ReplaceAll(res, ` `, `\s+`)
-
-	// Final cleanup and ensure it matches the whole line but is robust to trailing junk
-	return regexp.MustCompile("^" + res + `(?:\s*.*)?$`)
-}
-
-func parseLine(line string) *LogEntry {
-	entry := &LogEntry{
-		Raw:       line,
-		CreatedAt: time.Now().Unix(),
-		Path:      "-", // Default values so frontend shows something
-		Method:    "LOG",
-		Status:    200,
-	}
-
-	// Try specific format first
-	if matches := logRegex.FindStringSubmatch(line); matches != nil {
-		names := logRegex.SubexpNames()
-		for i, match := range matches {
-			if match == "" { continue }
-			switch names[i] {
-			case "ip":
-				entry.IP = match
-			case "time":
-				entry.Time = match
-			case "method":
-				entry.Method = match
-			case "path":
-				entry.Path = match
-			case "status":
-				fmt.Sscanf(match, "%d", &entry.Status)
-			case "query":
-				entry.Query = match
-			case "body":
-				entry.Body = match
-			case "bytes":
-				fmt.Sscanf(match, "%d", &entry.Bytes)
-			case "ua":
-				entry.UA = match
-			}
-		}
-	} else if matches := simpleRegex.FindStringSubmatch(line); matches != nil {
-		// Fallback to standard combined for testing/other logs
-		names := simpleRegex.SubexpNames()
-		for i, match := range matches {
-			switch names[i] {
-			case "ip":
-				entry.IP = match
-			case "time":
-				entry.Time = match
-			case "request":
-				// Split request
-				parts := strings.Split(match, " ")
-				if len(parts) >= 2 {
-					entry.Method = parts[0]
-					entry.Path = parts[1]
-				}
-			case "status":
-				fmt.Sscanf(match, "%d", &entry.Status)
-			case "bytes":
-				fmt.Sscanf(match, "%d", &entry.Bytes)
-			case "ua":
-				entry.UA = match
-			}
-		}
-	} else {
-		// If both fail, try to at least find an IP at the start
-		ipMatch := regexp.MustCompile(`^(\S+)`).FindStringSubmatch(line)
-		if len(ipMatch) > 1 {
-			entry.IP = ipMatch[1]
-		}
-		log.Printf("[Parse Error] Line did not match any format: %s", line)
-	}
-
-	// Enrich if UA is present
-	if entry.UA != "" {
-		ua := user_agent.New(entry.UA)
-		browser, version := ua.Browser()
-		entry.Browser = fmt.Sprintf("%s %s", browser, version)
-		entry.OS = ua.OS()
-		if ua.Mobile() {
-			entry.Device = "Mobile"
-		} else {
-			entry.Device = "Desktop"
-		}
-	}
-
-	// Extract DeviceID, Level, Tag from path/query if possible
-	if strings.Contains(entry.Path, "/log/") {
-		parts := strings.Split(entry.Path, "/")
-		for i, p := range parts {
-			if p == "log" && i+1 < len(parts) {
-				entry.DeviceID = strings.Split(parts[i+1], "?")[0]
-				break
-			}
-		}
-	}
-	
-	qStr := entry.Query
-	if qStr == "" && strings.Contains(entry.Path, "?") {
-		parts := strings.Split(entry.Path, "?")
-		if len(parts) > 1 {
-			qStr = parts[1]
-		}
-	}
-	
-	if qStr != "" {
-		// Manual simple parsing to avoid full URL parse complex objects
-		params := strings.Split(qStr, "&")
-		for _, p := range params {
-			kv := strings.SplitN(p, "=", 2)
-			if len(kv) == 2 {
-				switch kv[0] {
-				case "level":
-					entry.Level = kv[1]
-				case "tag":
-					entry.Tag = kv[1]
-				}
-			}
-		}
-	}
-
-	return entry
-}
-
-func tailLog(hub *Hub, filename string) {
-	t, err := tail.TailFile(filename, tail.Config{Follow: true, ReOpen: true, Location: &tail.SeekInfo{Offset: 0, Whence: 0}})
-	if err != nil {
-		log.Printf("Error tailing file: %v", err)
-		return
-	}
-	
-	for line := range t.Lines {
-		if line.Text == "" { continue }
-		
-		// Parse
-		entry := parseLine(line.Text)
-		
-		// Save DB
-		saveLog(entry)
-		
-		// Broadcast
-		hub.broadcast <- entry
-	}
-}
-
 func main() {
 	flag.Parse()
 
 	// 1. Start with defaults
 	finalAddr := ":58080"
-	finalLogFile := "/var/log/nginx/access.log"
 	finalDBPath := "./logs.db"
 	finalStaticDir := "./frontend/dist"
-	finalFormat := `$remote_addr - $remote_user [$time_local] "$request" $status GET_ARGS: "$query_string" POST_BODY: "$request_body"`
 
 	// 2. Override with Config File if provided
 	if *configPath != "" {
 		if cfg, err := loadConfig(*configPath); err == nil {
 			if cfg.Addr != "" { finalAddr = cfg.Addr }
-			if cfg.LogFile != "" { finalLogFile = cfg.LogFile }
 			if cfg.DBPath != "" { finalDBPath = cfg.DBPath }
-			if cfg.LogFormat != "" { finalFormat = cfg.LogFormat }
+			if cfg.StaticDir != "" { finalStaticDir = cfg.StaticDir }
 			log.Printf("Loaded config from %s", *configPath)
 		} else {
 			log.Printf("Warning: Failed to load config from %s: %v", *configPath, err)
@@ -855,46 +653,33 @@ func main() {
 
 	// 3. Override with Environment Variables
 	finalAddr = getEnv("LISTEN_ADDR", finalAddr)
-	finalLogFile = getEnv("LOG_FILE", finalLogFile)
 	finalDBPath = getEnv("DB_PATH", finalDBPath)
 	finalStaticDir = getEnv("STATIC_DIR", finalStaticDir)
-	finalFormat = getEnv("LOG_FORMAT", finalFormat)
 
 	// 4. Override with Command line flags (if they are NOT default values)
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "addr": finalAddr = *addr
-		case "file": finalLogFile = *logFile
 		case "db": finalDBPath = *dbPath
 		case "static": finalStaticDir = *staticDir
-		case "format": finalFormat = *formatStr
 		}
 	})
 
 	// Apply final values
-	absLogFile, _ := filepath.Abs(finalLogFile)
 	absDBPath, _ := filepath.Abs(finalDBPath)
 	
 	*addr = finalAddr
-	*logFile = absLogFile
 	*dbPath = absDBPath
 	*staticDir = finalStaticDir
-	*formatStr = finalFormat
 
-	log.Printf("Starting Nginx Log Viewer (Version: %s, Commit: %s)", Version, GitCommit)
-	log.Printf("Using log file: %s", *logFile)
+	log.Printf("Starting Log Viewer (Version: %s, Commit: %s)", Version, GitCommit)
 	log.Printf("Using database: %s", *dbPath)
-	log.Printf("Using log format: %s", *formatStr)
-	
-	logRegex = buildRegexFromNginx(*formatStr)
 
 	initDB()
 	startCleanupTask()
 	
 	hub := newHub()
 	go hub.run()
-
-	go tailLog(hub, *logFile)
 
 	// Serve static files (Frontend build)
 	fs := http.FileServer(http.Dir(*staticDir))
@@ -920,6 +705,5 @@ func main() {
 	})
 
 	fmt.Printf("Server started at http://localhost%s\n", *addr)
-	fmt.Printf("Watching file: %s\n", *logFile)
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }

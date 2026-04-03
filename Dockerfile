@@ -25,7 +25,7 @@ RUN CGO_ENABLED=0 \
     GOOS=$TARGETOS \
     GOARCH=$TARGETARCH \
     go build -trimpath -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}' -X 'main.GitCommit=${GIT_COMMIT}'" \
-    -o /out/nginx-log-viewer .
+    -o /out/log-viewer .
 
 # Stage 3: Final Runtime Image
 FROM alpine:3.19
@@ -38,7 +38,7 @@ RUN apk add --no-cache ca-certificates tzdata && \
     adduser -S appuser -G appuser
 
 # Copy binaries and assets
-COPY --from=backend-builder /out/nginx-log-viewer /app/nginx-log-viewer
+COPY --from=backend-builder /out/log-viewer /app/log-viewer
 COPY frontend/dist /app/frontend/dist
 
 # Set ownership
@@ -53,11 +53,11 @@ ARG GIT_COMMIT
 ARG VERSION
 
 # Metadata
-LABEL org.opencontainers.image.title="nginx-log-viewer" \
+LABEL org.opencontainers.image.title="log-viewer" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${GIT_COMMIT}" \
       org.opencontainers.image.created="${BUILD_TIME}"
 
 EXPOSE 58080
 
-CMD ["/app/nginx-log-viewer"]
+CMD ["/app/log-viewer"]
